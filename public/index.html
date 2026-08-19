@@ -2,8 +2,8 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
   <script>
   // usernode-dev-console@1
   (function () {
@@ -63,8 +63,8 @@
     try { post('info', ['[dev-console ready]'], { kind: 'ready' }); } catch (_) {}
   })();
   </script>
-  <title>my-cool-app</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%237c3aed'/><circle cx='50' cy='50' r='18' fill='white'/></svg>">
+  <title>Sun Position</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='62' r='22' fill='%23fbbf24'/><path d='M0 84h100v16H0z' fill='%231e1b4b'/></svg>">
   <!-- Tailwind, PRECOMPILED for this app (was cdn.tailwindcss.com's
        in-browser engine plus an inline tailwind.config here). The config
        moved to tailwind.config.js in the repo root; the Dockerfile's builder
@@ -78,56 +78,71 @@
        classes, swap this link for the platform-hosted engine instead:
        <script src="https://social-vibecoding.usernodelabs.org/usernode-tailwind/v1/tailwind.js"></script> -->
   <link rel="stylesheet" href="/tailwind.css">
+  <style>
+    html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+    #sky-canvas { position: fixed; inset: 0; touch-action: none; }
+    /* Safe-area aware placement: the platform forwards insets via
+       --un-safe-inset-*; env() covers standalone visits. */
+    #hud {
+      top: calc(0.75rem + var(--un-safe-inset-top, env(safe-area-inset-top, 0px)));
+    }
+  </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col items-center justify-center gap-8 p-4">
-  <h1 class="text-2xl font-bold">my-cool-app</h1>
+<body class="bg-zinc-950 text-zinc-100">
+  <canvas id="sky-canvas"></canvas>
 
-  <button id="press-btn" class="w-32 h-32 rounded-full bg-violet-600 hover:bg-violet-500 active:scale-95 transition-all text-white text-xl font-bold shadow-lg shadow-violet-600/30">
-    Press!
-  </button>
-
-  <div id="count" class="text-lg text-zinc-400">0 total presses</div>
-
-  <div class="w-full max-w-sm">
-    <h2 class="text-sm font-medium text-zinc-500 mb-2 text-center">Leaderboard</h2>
-    <div id="leaderboard" class="space-y-1"></div>
+  <!-- Info readout (tap the canvas to hide/show) -->
+  <div id="hud" class="fixed z-10 left-3 w-60 rounded-xl bg-zinc-950/55 backdrop-blur-md border border-white/10 p-3 text-[13px] leading-5 select-none">
+    <div class="flex items-center justify-between gap-2 mb-1">
+      <span id="hud-live" class="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wide text-emerald-400"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>LIVE</span>
+      <button id="btn-now" type="button" class="hidden text-[11px] px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-zinc-200">◉ now</button>
+    </div>
+    <div class="flex items-center justify-between gap-2 mb-2">
+      <span id="hud-loc" class="text-zinc-300 truncate">—</span>
+      <button id="btn-loc" type="button" class="text-[11px] px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-zinc-200 shrink-0">Change</button>
+    </div>
+    <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-zinc-400">
+      <span>Altitude</span><span id="hud-alt" class="text-right text-zinc-100 font-mono">—</span>
+      <span>Azimuth</span><span id="hud-az" class="text-right text-zinc-100 font-mono">—</span>
+      <span>Sunrise</span><span id="hud-sunrise" class="text-right text-zinc-100 font-mono">—</span>
+      <span>Solar noon</span><span id="hud-noon" class="text-right text-zinc-100 font-mono">—</span>
+      <span>Sunset</span><span id="hud-sunset" class="text-right text-zinc-100 font-mono">—</span>
+      <span>Day length</span><span id="hud-daylen" class="text-right text-zinc-100 font-mono">—</span>
+    </div>
+    <div id="hud-countdown" class="mt-1 text-amber-300/90"></div>
+    <div class="mt-2 text-[10px] text-zinc-500">Times in your local timezone · drag the bottom edge to scrub · tap the sky to hide this</div>
   </div>
 
-  <script>
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token') || '';
-    const headers = token ? { 'x-usernode-token': token } : {};
+  <!-- Location panel (fallback when geolocation is unavailable/denied) -->
+  <div id="loc-panel" class="fixed inset-0 z-20 hidden items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/50"></div>
+    <div class="relative w-full max-w-sm rounded-2xl bg-zinc-900/95 border border-zinc-700/60 p-5 backdrop-blur">
+      <h2 class="text-lg font-semibold mb-1">Set your location</h2>
+      <p class="text-sm text-zinc-400 mb-4">Used only to compute the sun's real position in the sky. Nothing leaves your device.</p>
+      <button id="btn-geo" type="button" class="w-full mb-4 px-4 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-medium">Use my location</button>
+      <label class="block text-xs uppercase tracking-wide text-zinc-500 mb-1" for="city-input">Search a city</label>
+      <input id="city-input" type="text" autocomplete="off" placeholder="e.g. Paris, Tokyo, São Paulo…" class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-violet-500">
+      <div id="city-results" class="mt-1 space-y-1 max-h-48 overflow-y-auto"></div>
+      <div class="mt-4 grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-zinc-500 mb-1" for="lat-input">Latitude</label>
+          <input id="lat-input" type="text" inputmode="decimal" placeholder="-90 … 90" class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-violet-500">
+        </div>
+        <div>
+          <label class="block text-xs uppercase tracking-wide text-zinc-500 mb-1" for="lon-input">Longitude</label>
+          <input id="lon-input" type="text" inputmode="decimal" placeholder="-180 … 180" class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-violet-500">
+        </div>
+      </div>
+      <p id="coord-error" class="hidden mt-2 text-xs text-red-400">Latitude must be −90…90 and longitude −180…180.</p>
+      <div class="mt-3 flex gap-2">
+        <button id="btn-set" type="button" class="flex-1 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm text-zinc-100">Set coordinates</button>
+        <button id="btn-close-panel" type="button" class="px-4 py-2 rounded-lg bg-transparent hover:bg-white/5 text-sm text-zinc-400">Cancel</button>
+      </div>
+    </div>
+  </div>
 
-    async function loadLeaderboard() {
-      const res = await fetch('/api/leaderboard', { headers });
-      if (!res.ok) return;
-      const { leaderboard } = await res.json();
-      const el = document.getElementById('leaderboard');
-      if (!leaderboard.length) {
-        el.innerHTML = '<p class="text-center text-zinc-600 text-sm">No presses yet</p>';
-        return;
-      }
-      el.innerHTML = leaderboard.map((r, i) =>
-        '<div class="flex justify-between px-3 py-1 rounded ' + (i === 0 ? 'bg-violet-600/20 text-violet-300' : 'text-zinc-400') + '">' +
-        '<span>' + (i + 1) + '. ' + r.username + '</span>' +
-        '<span class="font-mono">' + r.presses + '</span></div>'
-      ).join('');
-      const total = leaderboard.reduce((s, r) => s + parseInt(r.presses), 0);
-      document.getElementById('count').textContent = total + ' total presses';
-    }
-
-    document.getElementById('press-btn').addEventListener('click', async () => {
-      try {
-        const res = await fetch('/api/press', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers },
-        });
-        if (res.ok) loadLeaderboard();
-        else if (res.status === 401) document.getElementById('count').textContent = 'Sign in to press!';
-      } catch {}
-    });
-
-    loadLeaderboard();
-  </script>
+  <script src="/cities.js"></script>
+  <script src="/solar.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>

@@ -40,11 +40,24 @@ tables you've marked private), etc.
 
 ## About my-cool-app
 
-_(add a sentence or two of product context here so Claude Code has a
-shared understanding of what this app is for)_
+A full-screen generative-art visualization of the sun's real position
+(altitude/azimuth) at the viewer's location, computed entirely
+client-side (`public/solar.js`, Meeus/NOAA low-precision — no external
+astronomy API). The canvas paints a sky gradient keyed to solar
+altitude, today's sun arc, a star field at night, and a ridge landscape
+procedurally seeded from the coordinates. Location comes from browser
+geolocation with a manual city/lat-lon fallback (`public/cities.js`);
+dragging the bottom edge scrubs through the day.
 
 ## App-specific conventions
 
-_(optional — e.g. "all currency values stored as integer cents, not
-floats"; "the `posts` table is append-only"; "avoid adding new
-dependencies"; etc.)_
+- Purely client-side: no database-backed UI. The Postgres pool in
+  `server.js` is constructed but unused (the template's orphan
+  `presses` table was deliberately left in existing databases).
+- Deterministic deep links for tests/screenshots: `?lat=&lon=` fixes
+  the location, `?t=<ISO local datetime>` freezes the clock and all
+  animation, `?hud=0` hides the readout. Keep these working — the
+  `dapp.json` tests point at them.
+- All generative elements (stars, grain, ridges) use seeded PRNGs so
+  the same URL renders the same frame; don't introduce `Math.random()`
+  into the render path.

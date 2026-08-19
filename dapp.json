@@ -1,3 +1,17 @@
 {
-  "secrets": []
+  "secrets": [],
+  "tests": [
+    {
+      "name": "Day sky renders (Paris, solstice afternoon)",
+      "path": "/?lat=48.8566&lon=2.3522&t=2026-06-21T14:00",
+      "expectSelector": "#sky-canvas",
+      "expectText": "Solar noon"
+    },
+    {
+      "name": "Night sky renders (Paris, stars + sunrise countdown)",
+      "path": "/?lat=48.8566&lon=2.3522&t=2026-06-21T23:30",
+      "expectSelector": "#sky-canvas",
+      "expectText": "Sunrise in"
+    }
+  ]
 }
