@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__usernode__get_*",
+      "mcp__usernode__list_*",
+      "mcp__usernode__whoami",
+      "mcp__Usernode__get_*",
+      "mcp__Usernode__list_*",
+      "mcp__Usernode__whoami"
+    ]
+  }
+}
