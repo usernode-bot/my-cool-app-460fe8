@@ -1,3 +1,21 @@
 {
-  "secrets": []
+  "name": "Run Club",
+  "secrets": [],
+  "tests": [
+    {
+      "name": "Feed shows upcoming runs",
+      "path": "/",
+      "expectText": "Staging demo — Riverside loop"
+    },
+    {
+      "name": "Create run sheet opens",
+      "path": "/?shot=create",
+      "expectText": "Post run"
+    },
+    {
+      "name": "Past run shows photos",
+      "path": "/?shot=past",
+      "expectSelector": "[data-run-photo]"
+    }
+  ]
 }

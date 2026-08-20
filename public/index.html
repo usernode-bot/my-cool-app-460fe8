@@ -63,71 +63,535 @@
     try { post('info', ['[dev-console ready]'], { kind: 'ready' }); } catch (_) {}
   })();
   </script>
-  <title>my-cool-app</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%237c3aed'/><circle cx='50' cy='50' r='18' fill='white'/></svg>">
-  <!-- Tailwind, PRECOMPILED for this app (was cdn.tailwindcss.com's
-       in-browser engine plus an inline tailwind.config here). The config
-       moved to tailwind.config.js in the repo root; the Dockerfile's builder
-       stage compiles it to public/tailwind.css on every image build, so the
-       stylesheet is regenerated from THIS commit's markup every deploy and
-       can never drift behind the code. ~7 KB of CSS instead of a ~400 KB
-       engine, and no flash of unstyled content.
-       Writing class names as whole literals is what keeps this working — a
-       class assembled from fragments at runtime (e.g. "bg-" + tone + "-500")
-       is invisible to the compiler. If you genuinely need runtime-generated
-       classes, swap this link for the platform-hosted engine instead:
-       <script src="https://social-vibecoding.usernodelabs.org/usernode-tailwind/v1/tailwind.js"></script> -->
+  <title>Run Club</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%237c3aed'/><text x='50' y='68' font-size='52' text-anchor='middle'>🏃</text></svg>">
+  <!-- Tailwind, PRECOMPILED for this app. The config lives in
+       tailwind.config.js; the Dockerfile's builder stage compiles it to
+       public/tailwind.css on every image build, so the stylesheet is
+       regenerated from THIS commit's markup every deploy. Class names must
+       be whole literals — one assembled at runtime is invisible to the
+       compiler. -->
   <link rel="stylesheet" href="/tailwind.css">
+  <!-- Centrally hosted platform infrastructure — never vendor these.
+       The bridge gives us usernode.uploadFile / deleteFile for run photos;
+       the native kit gives us the iOS-feel chrome. -->
+  <script src="https://social-vibecoding.usernodelabs.org/usernode-bridge/v1/bridge.js"></script>
+  <link rel="stylesheet" href="https://social-vibecoding.usernodelabs.org/usernode-native/v1/native.css">
+  <script src="https://social-vibecoding.usernodelabs.org/usernode-native/v1/native.js"></script>
+  <style>
+    :root { --un-accent: #7c3aed; }
+    body { background: #09090b; }
+    /* The kit's .un-navbar is fixed, so the page content has to start
+       below it (bar height + whatever notch inset the platform forwards). */
+    main { padding-top: calc(44px + var(--un-safe-inset-top, env(safe-area-inset-top, 0px))); }
+    .rc-thumbs { scrollbar-width: none; }
+    .rc-thumbs::-webkit-scrollbar { display: none; }
+  </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col items-center justify-center gap-8 p-4">
-  <h1 class="text-2xl font-bold">my-cool-app</h1>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen">
 
-  <button id="press-btn" class="w-32 h-32 rounded-full bg-violet-600 hover:bg-violet-500 active:scale-95 transition-all text-white text-xl font-bold shadow-lg shadow-violet-600/30">
-    Press!
-  </button>
-
-  <div id="count" class="text-lg text-zinc-400">0 total presses</div>
-
-  <div class="w-full max-w-sm">
-    <h2 class="text-sm font-medium text-zinc-500 mb-2 text-center">Leaderboard</h2>
-    <div id="leaderboard" class="space-y-1"></div>
+  <div id="navbar" class="un-navbar un-safe-top">
+    <span class="un-navbar-title">Run Club</span>
+    <button id="add-run" class="un-touch-target un-pressable absolute right-3 bottom-1 text-2xl leading-none text-violet-400 px-2" aria-label="Organize a run">+</button>
   </div>
 
-  <script>
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token') || '';
-    const headers = token ? { 'x-usernode-token': token } : {};
+  <main>
+    <div id="large-title" class="un-navbar-large px-4 pt-2 pb-1">
+      <h1 class="text-3xl font-bold tracking-tight">Run Club</h1>
+      <p class="text-sm text-zinc-500 mt-1">Pick a place and an hour. Go running together.</p>
+    </div>
 
-    async function loadLeaderboard() {
-      const res = await fetch('/api/leaderboard', { headers });
-      if (!res.ok) return;
-      const { leaderboard } = await res.json();
-      const el = document.getElementById('leaderboard');
-      if (!leaderboard.length) {
-        el.innerHTML = '<p class="text-center text-zinc-600 text-sm">No presses yet</p>';
-        return;
-      }
-      el.innerHTML = leaderboard.map((r, i) =>
-        '<div class="flex justify-between px-3 py-1 rounded ' + (i === 0 ? 'bg-violet-600/20 text-violet-300' : 'text-zinc-400') + '">' +
-        '<span>' + (i + 1) + '. ' + r.username + '</span>' +
-        '<span class="font-mono">' + r.presses + '</span></div>'
-      ).join('');
-      const total = leaderboard.reduce((s, r) => s + parseInt(r.presses), 0);
-      document.getElementById('count').textContent = total + ' total presses';
+    <div class="px-4 pb-3">
+      <div class="flex gap-1 p-1 rounded-xl bg-zinc-900" role="tablist">
+        <button data-scope="upcoming" class="rc-seg un-pressable flex-1 py-1.5 text-sm font-medium rounded-lg">Upcoming</button>
+        <button data-scope="past" class="rc-seg un-pressable flex-1 py-1.5 text-sm font-medium rounded-lg">Past</button>
+      </div>
+    </div>
+
+    <div id="feed" class="px-4 pb-24"></div>
+  </main>
+
+  <script>
+  (function () {
+    'use strict';
+
+    var params = new URLSearchParams(location.search);
+    var token = params.get('token') || '';
+    var authHeaders = token ? { 'x-usernode-token': token } : {};
+    var MAX_PHOTOS_PER_RUN = 12;
+    var MAX_EDGE = 1600;          // long-edge cap for client-side downscale
+    var JPEG_QUALITY = 0.82;
+    var FILE_ID_RE = /^[0-9a-f]{32}$/;
+
+    // The bridge rejects outside the platform shell (standalone page, local
+    // dev). Uploads are simply not offered there; existing photos still show.
+    function uploadsEnabled() {
+      return !!(window.usernode && typeof window.usernode.uploadFile === 'function');
     }
 
-    document.getElementById('press-btn').addEventListener('click', async () => {
+    var state = { scope: params.get('shot') === 'past' ? 'past' : 'upcoming', runs: [], busy: {} };
+
+    // ---------------------------------------------------------------- utils
+
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    async function api(url, opts) {
+      opts = opts || {};
+      var res = await fetch(url, {
+        method: opts.method || 'GET',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders),
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+      var data = null;
+      try { data = await res.json(); } catch (e) {}
+      if (!res.ok) {
+        var err = new Error((data && data.error) || 'Request failed');
+        err.code = data && data.code;
+        err.status = res.status;
+        throw err;
+      }
+      return data || {};
+    }
+
+    // Thin shim over the native kit so the page still works (and the declared
+    // checks still pass) if the hosted kit is unreachable.
+    var ui = {
+      toast: function (msg) {
+        if (window.unNative && unNative.toast) return unNative.toast(msg);
+        var el = document.createElement('div');
+        el.className = 'fixed left-1/2 -translate-x-1/2 bottom-10 z-50 px-4 py-2 rounded-full bg-zinc-800 text-zinc-100 text-sm shadow-lg';
+        el.textContent = msg;
+        document.body.appendChild(el);
+        setTimeout(function () { el.remove(); }, 2400);
+      },
+      sheet: function (contentEl) {
+        if (window.unNative && unNative.presentSheet) return unNative.presentSheet({ contentEl: contentEl });
+        return fallbackOverlay(contentEl, 'items-end');
+      },
+      modal: function (contentEl) {
+        if (window.unNative && unNative.presentModal) return unNative.presentModal({ contentEl: contentEl });
+        return fallbackOverlay(contentEl, 'items-center');
+      },
+      confirm: async function (title, message, confirmLabel) {
+        if (window.unNative && unNative.alert) {
+          var r = await unNative.alert({
+            title: title, message: message,
+            buttons: [
+              { label: 'Keep', style: 'cancel' },
+              { label: confirmLabel, style: 'destructive' },
+            ],
+          });
+          return !!(r && r.button && r.button.label === confirmLabel);
+        }
+        return window.confirm(title + (message ? '\n\n' + message : ''));
+      },
+    };
+
+    function fallbackOverlay(contentEl, align) {
+      var back = document.createElement('div');
+      back.className = 'fixed inset-0 z-50 bg-black/60 flex justify-center ' + align;
+      var card = document.createElement('div');
+      card.className = 'w-full max-w-md bg-zinc-900 rounded-2xl p-4 m-3 max-h-[90vh] overflow-auto';
+      card.appendChild(contentEl);
+      back.appendChild(card);
+      back.addEventListener('click', function (e) { if (e.target === back) handle.dismiss(); });
+      document.body.appendChild(back);
+      var handle = { el: card, dismiss: function () { back.remove(); } };
+      return handle;
+    }
+
+    // "Today 6:30 PM" / "Tomorrow 7:00 AM" / "Sat, Aug 22 · 7:00 AM"
+    function formatWhen(iso) {
+      var d = new Date(iso);
+      var time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      var midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+      var days = Math.floor((d - midnight) / 86400000);
+      if (days === 0) return 'Today ' + time;
+      if (days === 1) return 'Tomorrow ' + time;
+      if (days === -1) return 'Yesterday ' + time;
+      var day = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+      return day + ' · ' + time;
+    }
+
+    function goingLabel(run) {
+      var names = (run.attendees || []).map(function (a) { return a.username; });
+      if (!names.length) return 'Nobody going yet';
+      return names.length + ' going · ' + names.join(', ');
+    }
+
+    // ---------------------------------------------------------------- feed
+
+    function runCard(run) {
+      var past = state.scope === 'past';
+      var photos = run.photos || [];
+      var thumbs = photos.map(function (p, i) {
+        return '<button class="rc-thumb un-pressable shrink-0 w-20 h-20 rounded-xl overflow-hidden bg-zinc-800" ' +
+          'data-run-photo data-photo-index="' + i + '" data-run-id="' + run.id + '" aria-label="Open photo">' +
+          '<img src="' + esc(p.url) + '" alt="" loading="lazy" class="w-full h-full object-cover">' +
+          '</button>';
+      }).join('');
+
+      var photoBlock = '';
+      if (past) {
+        var canAdd = run.can_add_photos && uploadsEnabled();
+        var full = photos.length >= MAX_PHOTOS_PER_RUN;
+        var strip = thumbs
+          ? '<div class="rc-thumbs flex gap-2 overflow-x-auto pb-1">' + thumbs + '</div>' : '';
+        var addBtn = '';
+        if (canAdd && full) {
+          addBtn = '<p class="text-xs text-zinc-500 mt-2">Photo limit reached for this run.</p>';
+        } else if (canAdd) {
+          addBtn = '<button class="rc-add-photos un-pressable mt-2 text-sm font-medium text-violet-400" ' +
+            'data-run-id="' + run.id + '">' + (photos.length ? '+ Add more photos' : '+ Add photos') + '</button>';
+        }
+        if (strip || addBtn) {
+          photoBlock = '<div class="un-group-row px-4 py-3">' + strip + addBtn +
+            '<div class="rc-progress hidden text-xs text-zinc-500 mt-2" data-progress-for="' + run.id + '"></div></div>';
+        }
+      }
+
+      var action = '';
+      if (!past) {
+        var joined = !!run.joined;
+        action = '<button class="rc-join un-pressable shrink-0 px-4 py-1.5 rounded-full text-sm font-semibold ' +
+          (joined ? 'bg-zinc-800 text-zinc-400' : 'bg-violet-600 text-white') + '" ' +
+          'data-run-id="' + run.id + '" data-joined="' + joined + '">' +
+          (joined ? 'Leave' : 'Join') + '</button>';
+      }
+
+      return '<div class="un-group mb-3" data-run="' + run.id + '">' +
+        '<div class="un-group-row rc-row px-4 py-3" data-run-id="' + run.id + '" data-creator="' + (run.is_creator ? '1' : '0') + '">' +
+          '<div class="flex items-start gap-3">' +
+            '<div class="min-w-0 flex-1">' +
+              '<div class="text-base font-semibold leading-snug">' + esc(run.location) + '</div>' +
+              '<div class="text-sm text-violet-400 mt-0.5">' + esc(formatWhen(run.starts_at)) + '</div>' +
+              (run.note ? '<div class="text-sm text-zinc-400 mt-1">' + esc(run.note) + '</div>' : '') +
+              '<div class="text-xs text-zinc-500 mt-2">' + esc(goingLabel(run)) + '</div>' +
+            '</div>' + action +
+          '</div>' +
+        '</div>' + photoBlock +
+      '</div>';
+    }
+
+    function emptyState() {
+      return state.scope === 'upcoming'
+        ? '<p class="text-center text-zinc-500 text-sm py-12">No runs planned — tap + to organize one.</p>'
+        : '<p class="text-center text-zinc-500 text-sm py-12">No past runs yet.</p>';
+    }
+
+    function paintSegments() {
+      document.querySelectorAll('.rc-seg').forEach(function (b) {
+        var on = b.dataset.scope === state.scope;
+        b.className = 'rc-seg un-pressable flex-1 py-1.5 text-sm font-medium rounded-lg ' +
+          (on ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400');
+      });
+    }
+
+    async function render() {
+      paintSegments();
+      var feed = document.getElementById('feed');
       try {
-        const res = await fetch('/api/press', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers },
+        var data = await api('/api/runs?scope=' + state.scope);
+        state.runs = data.runs || [];
+      } catch (e) {
+        feed.innerHTML = '<p class="text-center text-zinc-500 text-sm py-12">Could not load runs.</p>';
+        return;
+      }
+      feed.innerHTML = state.runs.length ? state.runs.map(runCard).join('') : emptyState();
+      wireCards();
+    }
+
+    function wireCards() {
+      // Organizer-only cancel, revealed by swiping the row left.
+      if (window.unNative && unNative.attachSwipeActions) {
+        document.querySelectorAll('.rc-row[data-creator="1"]').forEach(function (row) {
+          unNative.attachSwipeActions(row, {
+            actions: [{
+              label: 'Cancel', destructive: true,
+              handler: function () { cancelRun(row.dataset.runId, true); },
+            }],
+          });
         });
-        if (res.ok) loadLeaderboard();
-        else if (res.status === 401) document.getElementById('count').textContent = 'Sign in to press!';
-      } catch {}
+      }
+    }
+
+    // ------------------------------------------------------- join / cancel
+
+    async function toggleJoin(btn) {
+      var id = btn.dataset.runId;
+      if (state.busy[id]) return;
+      state.busy[id] = true;
+      btn.disabled = true;
+      var joined = btn.dataset.joined === 'true';
+      try {
+        await api('/api/runs/' + id + '/join', { method: joined ? 'DELETE' : 'POST' });
+        ui.toast(joined ? 'You left this run' : "You're in!");
+        await render();
+      } catch (e) {
+        if (e.status === 404) ui.toast('That run was cancelled');
+        else if (e.code === 'run_not_upcoming') ui.toast('That run already happened');
+        else ui.toast(e.message || 'Something went wrong');
+        await render();
+      } finally {
+        state.busy[id] = false;
+      }
+    }
+
+    async function cancelRun(id, alreadyRemoved) {
+      var ok = await ui.confirm('Cancel this run?',
+        'Everyone who joined will lose it. This cannot be undone.', 'Cancel run');
+      if (!ok) { if (alreadyRemoved) await render(); return; }
+      try {
+        await api('/api/runs/' + id, { method: 'DELETE' });
+        ui.toast('Run cancelled');
+      } catch (e) {
+        ui.toast(e.code === 'not_creator' ? 'Only the organizer can cancel this run' : 'Could not cancel that run');
+      }
+      await render();
+    }
+
+    // ------------------------------------------------------------ new run
+
+    function defaultStart() {
+      var d = new Date();
+      d.setDate(d.getDate() + 1);
+      d.setHours(7, 0, 0, 0);
+      return localInputValue(d);
+    }
+
+    function localInputValue(d) {
+      var p = function (n) { return String(n).padStart(2, '0'); };
+      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+        'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+
+    function openCreateSheet() {
+      var el = document.createElement('div');
+      el.className = 'px-4 pb-4';
+      el.innerHTML =
+        '<h2 class="text-lg font-semibold mb-3">Organize a run</h2>' +
+        '<label class="block text-xs font-medium text-zinc-500 mb-1">Where</label>' +
+        '<input id="rc-where" type="text" maxlength="200" placeholder="Riverside Park, main gate" ' +
+          'class="w-full mb-3 px-3 py-2 rounded-xl bg-zinc-800 text-zinc-100 placeholder-zinc-500 outline-none">' +
+        '<label class="block text-xs font-medium text-zinc-500 mb-1">When</label>' +
+        '<input id="rc-when" type="datetime-local" class="w-full mb-3 px-3 py-2 rounded-xl bg-zinc-800 text-zinc-100 outline-none">' +
+        '<label class="block text-xs font-medium text-zinc-500 mb-1">Note (optional)</label>' +
+        '<input id="rc-note" type="text" maxlength="200" placeholder="easy 5k, ~6:30/km" ' +
+          'class="w-full mb-4 px-3 py-2 rounded-xl bg-zinc-800 text-zinc-100 placeholder-zinc-500 outline-none">' +
+        '<button id="rc-post" class="un-pressable w-full py-3 rounded-xl bg-violet-600 text-white font-semibold">Post run</button>';
+
+      var sheet = ui.sheet(el);
+      var when = el.querySelector('#rc-when');
+      when.min = localInputValue(new Date());
+      when.value = defaultStart();
+
+      el.querySelector('#rc-post').addEventListener('click', async function () {
+        var btn = this;
+        var location = el.querySelector('#rc-where').value.trim();
+        var whenVal = when.value;
+        if (!location) return ui.toast('Add a meeting place');
+        if (!whenVal) return ui.toast('Pick a date and time');
+        var startsAt = new Date(whenVal);
+        if (isNaN(startsAt.getTime())) return ui.toast('Pick a date and time');
+        if (startsAt.getTime() <= Date.now()) return ui.toast('Pick a time in the future');
+        btn.disabled = true;
+        try {
+          await api('/api/runs', {
+            method: 'POST',
+            body: {
+              location: location,
+              startsAt: startsAt.toISOString(),
+              note: el.querySelector('#rc-note').value.trim(),
+            },
+          });
+          sheet.dismiss();
+          ui.toast('Run posted');
+          state.scope = 'upcoming';
+          await render();
+        } catch (e) {
+          btn.disabled = false;
+          ui.toast(e.message || 'Could not post that run');
+        }
+      });
+    }
+
+    // ------------------------------------------------------------- photos
+
+    var UPLOAD_ERRORS = {
+      file_too_large: 'That photo is too large (5 MB max)',
+      invalid_image: "That file isn't a supported image",
+      user_quota_exceeded: "You've used up your photo storage for this app",
+      app_quota_exceeded: "The club's photo storage is full",
+      staging_quota_exceeded: 'Staging photo storage is full',
+      storage_unavailable: 'Photo uploads are unavailable right now',
+      run_not_past: 'Photos can only be added after the run',
+      not_attendee: 'Only people who were on this run can add photos',
+      photo_limit: 'Photo limit reached for this run',
+      invalid_file: "That upload didn't look right",
+      run_gone: 'That run is gone',
+    };
+
+    function uploadErrorMessage(err) {
+      var code = err && (err.code || (err.error && err.error.code));
+      if (code && UPLOAD_ERRORS[code]) return UPLOAD_ERRORS[code];
+      return "Photo uploads aren't available here";
+    }
+
+    // The platform does no server-side resizing, so a camera photo is
+    // downscaled here before it ever leaves the device. GIFs pass through
+    // untouched (canvas re-encoding would kill the animation).
+    function downscale(file) {
+      return new Promise(function (resolve) {
+        if (file.type === 'image/gif' || (file.size <= 1024 * 1024)) return resolve(file);
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function () {
+          var scale = Math.min(1, MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+          if (scale >= 1) { URL.revokeObjectURL(url); return resolve(file); }
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.naturalWidth * scale);
+          canvas.height = Math.round(img.naturalHeight * scale);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob(function (blob) {
+            URL.revokeObjectURL(url);
+            if (!blob) return resolve(file);
+            blob.name = (file.name || 'run-photo').replace(/\.[^.]+$/, '') + '.jpg';
+            resolve(new File([blob], blob.name, { type: 'image/jpeg' }));
+          }, 'image/jpeg', JPEG_QUALITY);
+        };
+        img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
+        img.src = url;
+      });
+    }
+
+    function pickPhotos(runId) {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.multiple = true;
+      input.style.display = 'none';
+      document.body.appendChild(input);
+      input.addEventListener('change', async function () {
+        var files = Array.prototype.slice.call(input.files || []);
+        input.remove();
+        if (files.length) await uploadPhotos(runId, files);
+      });
+      input.click();
+    }
+
+    async function uploadPhotos(runId, files) {
+      var progress = document.querySelector('[data-progress-for="' + runId + '"]');
+      var ok = 0, failed = 0, lastMessage = '';
+      for (var i = 0; i < files.length; i++) {
+        if (progress) {
+          progress.classList.remove('hidden');
+          progress.textContent = 'Uploading ' + (i + 1) + ' of ' + files.length + '…';
+        }
+        var file = files[i];
+        try {
+          if (!/^image\//.test(file.type)) throw { code: 'invalid_image' };
+          var blob = await downscale(file);
+          // Bridge upload: bytes go to platform storage, never to our DB.
+          var stored = await usernode.uploadFile(blob, { visibility: 'public' });
+          await api('/api/runs/' + runId + '/photos', {
+            method: 'POST', body: { fileId: stored.id, url: stored.url },
+          });
+          ok++;
+        } catch (e) {
+          failed++;
+          lastMessage = uploadErrorMessage(e);
+        }
+      }
+      if (progress) { progress.classList.add('hidden'); progress.textContent = ''; }
+      if (ok && !failed) ui.toast(ok === 1 ? 'Photo added' : ok + ' photos added');
+      else if (ok && failed) ui.toast(ok + (ok === 1 ? ' photo added, ' : ' photos added, ') + failed + ' failed');
+      else ui.toast(lastMessage || 'Could not add that photo');
+      await render();
+    }
+
+    function openPhoto(runId, index) {
+      var run = state.runs.filter(function (r) { return String(r.id) === String(runId); })[0];
+      if (!run) return;
+      var photo = (run.photos || [])[index];
+      if (!photo) return;
+
+      var el = document.createElement('div');
+      el.className = 'flex flex-col gap-3';
+      el.innerHTML =
+        '<img src="' + esc(photo.url) + '" alt="" class="w-full max-h-[70vh] object-contain rounded-xl bg-black">' +
+        '<div class="text-xs text-zinc-500 text-center">Added by ' + esc(photo.uploaderUsername) + '</div>' +
+        '<div class="flex gap-2">' +
+          (photo.mine ? '<button id="rc-photo-del" class="un-pressable flex-1 py-2.5 rounded-xl bg-red-600/20 text-red-400 font-semibold">Delete</button>' : '') +
+          '<button id="rc-photo-done" class="un-pressable flex-1 py-2.5 rounded-xl bg-zinc-800 text-zinc-100 font-semibold">Done</button>' +
+        '</div>';
+
+      var modal = ui.modal(el);
+      el.querySelector('#rc-photo-done').addEventListener('click', function () { modal.dismiss(); });
+      var del = el.querySelector('#rc-photo-del');
+      if (del) {
+        del.addEventListener('click', async function () {
+          var ok = await ui.confirm('Delete this photo?', 'It will be removed for everyone.', 'Delete');
+          if (!ok) return;
+          try {
+            // Seeded staging rows carry a non-hex file id and no platform
+            // file behind them — skip the bridge call for those. A bridge
+            // failure is logged, not fatal: the row is the UI's truth.
+            if (FILE_ID_RE.test(photo.fileId || '') && window.usernode && usernode.deleteFile) {
+              try { await usernode.deleteFile(photo.fileId); } catch (e) { console.warn('deleteFile failed', e); }
+            }
+            await api('/api/runs/' + runId + '/photos/' + photo.id, { method: 'DELETE' });
+            modal.dismiss();
+            ui.toast('Photo removed');
+            await render();
+          } catch (e) {
+            ui.toast(e.code === 'not_uploader' ? 'You can only remove your own photos' : 'Could not remove that photo');
+          }
+        });
+      }
+    }
+
+    // -------------------------------------------------------------- events
+
+    document.addEventListener('click', function (e) {
+      var seg = e.target.closest('.rc-seg');
+      if (seg) { state.scope = seg.dataset.scope; render(); return; }
+
+      var join = e.target.closest('.rc-join');
+      if (join) { toggleJoin(join); return; }
+
+      var add = e.target.closest('.rc-add-photos');
+      if (add) { pickPhotos(add.dataset.runId); return; }
+
+      var thumb = e.target.closest('.rc-thumb');
+      if (thumb) { openPhoto(thumb.dataset.runId, Number(thumb.dataset.photoIndex)); return; }
     });
 
-    loadLeaderboard();
+    document.getElementById('add-run').addEventListener('click', openCreateSheet);
+
+    // A broken thumbnail (file cleaned up platform-side) hides its tile
+    // instead of showing a broken-image glyph.
+    document.addEventListener('error', function (e) {
+      if (e.target && e.target.tagName === 'IMG' && e.target.closest('.rc-thumb')) {
+        e.target.closest('.rc-thumb').style.display = 'none';
+      }
+    }, true);
+
+    if (window.unNative && unNative.attachNavBar) {
+      unNative.attachNavBar(document.getElementById('navbar'), {
+        largeTitleEl: document.getElementById('large-title'),
+      });
+    }
+
+    render().then(function () {
+      // Screenshot-state deep link: the create sheet is otherwise only
+      // reachable by tapping +.
+      if (params.get('shot') === 'create') openCreateSheet();
+    });
+  })();
   </script>
 </body>
 </html>

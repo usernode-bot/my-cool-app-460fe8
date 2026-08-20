@@ -1,0 +1,9 @@
+node_modules/
+package-lock.json
+
+# Compiled by the Dockerfile's builder stage on every image build — never
+# committed, so the stylesheet always matches this commit's markup.
+public/tailwind.css
+
+# Scratch output from the in-loop browser.
+.playwright-mcp/
