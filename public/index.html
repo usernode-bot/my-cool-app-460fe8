@@ -78,6 +78,24 @@
        classes, swap this link for the platform-hosted engine instead:
        <script src="https://social-vibecoding.usernodelabs.org/usernode-tailwind/v1/tailwind.js"></script> -->
   <link rel="stylesheet" href="/tailwind.css">
+  <style>
+    /* Reusable ripple effect — see attachRipple() below. Plain CSS, no
+       Tailwind utilities involved, so it works regardless of which
+       styling path an app is on. */
+    .ripple-host { position: relative; overflow: hidden; }
+    .ripple-effect {
+      position: absolute;
+      border-radius: 50%;
+      transform: scale(0);
+      opacity: 0.6;
+      background: rgba(255, 255, 255, 0.55);
+      pointer-events: none;
+      animation: ripple-expand 600ms ease-out forwards;
+    }
+    @keyframes ripple-expand {
+      to { transform: scale(1); opacity: 0; }
+    }
+  </style>
 </head>
 <body class="bg-zinc-50 text-zinc-900 min-h-screen flex flex-col items-center justify-center gap-8 p-4">
   <h1 class="text-2xl font-bold">my-cool-app</h1>
@@ -94,6 +112,38 @@
   </div>
 
   <script>
+    // Reusable ripple-on-click/tap effect. Apply to any element with
+    // attachRipple(el, { color, duration }) — works with mouse, touch,
+    // and pen via pointer events. Adds `.ripple-host` (position:
+    // relative + overflow:hidden) so the ripple is clipped to the
+    // element, then spawns a circle sized to fully cover the element
+    // from whichever point was pressed, expands it, fades it out, and
+    // removes it from the DOM once the animation finishes.
+    function attachRipple(el, options) {
+      const opts = options || {};
+      const color = opts.color || 'rgba(255, 255, 255, 0.55)';
+      const duration = opts.duration || 600;
+      el.classList.add('ripple-host');
+      el.addEventListener('pointerdown', (e) => {
+        const rect = el.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height) * 2;
+        const x = e.clientX - rect.left - size / 2;
+        const y = e.clientY - rect.top - size / 2;
+        const ripple = document.createElement('span');
+        ripple.className = 'ripple-effect';
+        ripple.style.width = size + 'px';
+        ripple.style.height = size + 'px';
+        ripple.style.left = x + 'px';
+        ripple.style.top = y + 'px';
+        ripple.style.background = color;
+        ripple.style.animationDuration = duration + 'ms';
+        ripple.addEventListener('animationend', () => ripple.remove());
+        el.appendChild(ripple);
+      });
+    }
+
+    attachRipple(document.getElementById('press-btn'));
+
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token') || '';
     const headers = token ? { 'x-usernode-token': token } : {};
