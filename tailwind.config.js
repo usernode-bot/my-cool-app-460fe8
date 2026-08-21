@@ -21,10 +21,6 @@ module.exports = {
   // extractor cannot see them. Prefer whole literals in the markup instead.
   safelist: [],
 
-  // Matches the <html class="dark"> in public/index.html: dark: variants key
-  // off that class rather than the OS colour-scheme preference.
-  darkMode: 'class',
-
   // Stops hover: styles sticking after a tap on touch screens. Required by
   // the usernode-native UI kit and harmless without it.
   future: { hoverOnlyWhenSupported: true },

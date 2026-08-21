@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const port = process.env.PORT || 3000;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const IS_STAGING = process.env.USERNODE_ENV === 'staging';
 
 // The platform signs user-identity tokens with an RSA private key it never
 // shares. Containers get only the PUBLIC half, so this app can verify who a
@@ -121,10 +122,10 @@ app.get('*', (req, res) => {
       return res.redirect(302, 'https://social-vibecoding.usernodelabs.org/#app/my-cool-app-460fe8/full' + deepPath);
     }
     return res.status(401).send(`<!doctype html><meta charset=utf-8><title>Open in Usernode</title>
-<body style="font-family:system-ui;background:#09090b;color:#e4e4e7;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0">
+<body style="font-family:system-ui;background:#ffffff;color:#18181b;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0">
   <div style="max-width:24rem;padding:2rem;text-align:center">
     <h1 style="font-size:1.25rem;margin:0 0 0.5rem">Open this app inside Usernode</h1>
-    <p style="color:#a1a1aa;font-size:0.9rem;margin:0 0 1.25rem">This page is served via the platform; direct visits aren't authenticated.</p>
+    <p style="color:#52525b;font-size:0.9rem;margin:0 0 1.25rem">This page is served via the platform; direct visits aren't authenticated.</p>
     <a href="https://social-vibecoding.usernodelabs.org/#app/my-cool-app-460fe8/full${deepPath}" style="display:inline-block;padding:0.5rem 1rem;background:#7c3aed;color:white;border-radius:0.5rem;text-decoration:none;font-size:0.9rem">Open in Usernode</a>
   </div>
 </body>`);
@@ -141,6 +142,34 @@ async function start() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+
+  // Staging previews start from an empty table, which only ever shows the
+  // "No presses yet" empty state. Seed a few fake presses across distinct
+  // usernames so the leaderboard's highlighted #1 row and the plain rows
+  // below it are both visible to a tester. Guarded by a LIKE check (the
+  // table has no unique key to ON CONFLICT against) so repeated boots don't
+  // pile up duplicate rows.
+  if (IS_STAGING) {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM presses WHERE username LIKE 'staging-demo-%' LIMIT 1`
+    );
+    if (rows.length === 0) {
+      const seed = [
+        [-901, 'staging-demo-ada', 5],
+        [-902, 'staging-demo-lin', 3],
+        [-903, 'staging-demo-kofi', 2],
+      ];
+      for (const [userId, username, presses] of seed) {
+        for (let i = 0; i < presses; i++) {
+          await pool.query(
+            `INSERT INTO presses (user_id, username) VALUES ($1, $2)`,
+            [userId, username]
+          );
+        }
+      }
+    }
+  }
+
   app.listen(port, () => console.log(`Listening on :${port}`));
 }
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -79,17 +79,17 @@
        <script src="https://social-vibecoding.usernodelabs.org/usernode-tailwind/v1/tailwind.js"></script> -->
   <link rel="stylesheet" href="/tailwind.css">
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col items-center justify-center gap-8 p-4">
+<body class="bg-zinc-50 text-zinc-900 min-h-screen flex flex-col items-center justify-center gap-8 p-4">
   <h1 class="text-2xl font-bold">my-cool-app</h1>
 
   <button id="press-btn" class="w-32 h-32 rounded-full bg-violet-600 hover:bg-violet-500 active:scale-95 transition-all text-white text-xl font-bold shadow-lg shadow-violet-600/30">
     Press!
   </button>
 
-  <div id="count" class="text-lg text-zinc-400">0 total presses</div>
+  <div id="count" class="text-lg text-zinc-500">0 total presses</div>
 
   <div class="w-full max-w-sm">
-    <h2 class="text-sm font-medium text-zinc-500 mb-2 text-center">Leaderboard</h2>
+    <h2 class="text-sm font-medium text-zinc-600 mb-2 text-center">Leaderboard</h2>
     <div id="leaderboard" class="space-y-1"></div>
   </div>
 
@@ -104,11 +104,11 @@
       const { leaderboard } = await res.json();
       const el = document.getElementById('leaderboard');
       if (!leaderboard.length) {
-        el.innerHTML = '<p class="text-center text-zinc-600 text-sm">No presses yet</p>';
+        el.innerHTML = '<p class="text-center text-zinc-500 text-sm">No presses yet</p>';
         return;
       }
       el.innerHTML = leaderboard.map((r, i) =>
-        '<div class="flex justify-between px-3 py-1 rounded ' + (i === 0 ? 'bg-violet-600/20 text-violet-300' : 'text-zinc-400') + '">' +
+        '<div class="flex justify-between px-3 py-1 rounded ' + (i === 0 ? 'bg-violet-600/20 text-violet-700' : 'text-zinc-600') + '">' +
         '<span>' + (i + 1) + '. ' + r.username + '</span>' +
         '<span class="font-mono">' + r.presses + '</span></div>'
       ).join('');
