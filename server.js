@@ -158,6 +158,7 @@ async function start() {
         [-901, 'staging-demo-ada', 5],
         [-902, 'staging-demo-lin', 3],
         [-903, 'staging-demo-kofi', 2],
+        [-904, 'staging-demo-remy', 1],
       ];
       for (const [userId, username, presses] of seed) {
         for (let i = 0; i < presses; i++) {

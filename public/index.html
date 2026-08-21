@@ -107,11 +107,19 @@
         el.innerHTML = '<p class="text-center text-zinc-500 text-sm">No presses yet</p>';
         return;
       }
-      el.innerHTML = leaderboard.map((r, i) =>
-        '<div class="flex justify-between px-3 py-1 rounded ' + (i === 0 ? 'bg-violet-600/20 text-violet-700' : 'text-zinc-600') + '">' +
-        '<span>' + (i + 1) + '. ' + r.username + '</span>' +
-        '<span class="font-mono">' + r.presses + '</span></div>'
-      ).join('');
+      const RANK_STYLES = [
+        { cls: 'bg-violet-600/20 text-violet-700 font-semibold', medal: '🥇 ' },
+        { cls: 'bg-zinc-200/60 text-zinc-700', medal: '🥈 ' },
+        { cls: 'bg-amber-100/70 text-amber-800', medal: '🥉 ' },
+      ];
+      el.innerHTML = leaderboard.map((r, i) => {
+        const rank = RANK_STYLES[i];
+        const cls = rank ? rank.cls : 'text-zinc-600';
+        const label = rank ? rank.medal + r.username : (i + 1) + '. ' + r.username;
+        return '<div class="flex justify-between px-3 py-1 rounded ' + cls + '">' +
+          '<span>' + label + '</span>' +
+          '<span class="font-mono">' + r.presses + '</span></div>';
+      }).join('');
       const total = leaderboard.reduce((s, r) => s + parseInt(r.presses), 0);
       document.getElementById('count').textContent = total + ' total presses';
     }
