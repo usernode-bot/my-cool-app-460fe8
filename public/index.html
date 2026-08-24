@@ -78,6 +78,27 @@
        classes, swap this link for the platform-hosted engine instead:
        <script src="https://social-vibecoding.usernodelabs.org/usernode-tailwind/v1/tailwind.js"></script> -->
   <link rel="stylesheet" href="/tailwind.css">
+  <style>
+    #confetti-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 9999;
+    }
+    .confetti-piece {
+      position: absolute;
+      top: -12px;
+      width: 8px;
+      height: 14px;
+      opacity: 0.95;
+      animation: confetti-fall linear forwards;
+    }
+    @keyframes confetti-fall {
+      0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(110vh) rotate(720deg); opacity: 0.3; }
+    }
+  </style>
 </head>
 <body class="bg-zinc-50 text-zinc-900 min-h-screen flex flex-col items-center justify-center gap-8 p-4">
   <h1 class="text-2xl font-bold">my-cool-app</h1>
@@ -116,13 +137,43 @@
         const rank = RANK_STYLES[i];
         const cls = rank ? rank.cls : 'text-zinc-600';
         const label = rank ? rank.medal + r.username : (i + 1) + '. ' + r.username;
-        return '<div class="flex justify-between px-3 py-1 rounded ' + cls + '">' +
-          '<span>' + label + '</span>' +
+        const confettiBtn = i === 0
+          ? '<button class="confetti-btn ml-2 leading-none hover:scale-110 active:scale-95 transition-transform" aria-label="Celebrate #1">🎉</button>'
+          : '';
+        return '<div class="flex justify-between items-center px-3 py-1 rounded ' + cls + '">' +
+          '<span class="flex items-center">' + label + confettiBtn + '</span>' +
           '<span class="font-mono">' + r.presses + '</span></div>';
       }).join('');
       const total = leaderboard.reduce((s, r) => s + parseInt(r.presses), 0);
       document.getElementById('count').textContent = total + ' total presses';
     }
+
+    const CONFETTI_COLORS = ['#7c3aed', '#f59e0b', '#ef4444', '#10b981', '#3b82f6', '#ec4899'];
+
+    function fireConfetti() {
+      let overlay = document.getElementById('confetti-overlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'confetti-overlay';
+        document.body.appendChild(overlay);
+      }
+      const pieceCount = 80;
+      for (let i = 0; i < pieceCount; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        piece.style.left = Math.random() * 100 + 'vw';
+        piece.style.backgroundColor = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+        const duration = 1.6 + Math.random() * 1.2;
+        piece.style.animationDuration = duration + 's';
+        piece.style.animationDelay = (Math.random() * 0.3) + 's';
+        overlay.appendChild(piece);
+        setTimeout(() => piece.remove(), (duration + 0.3) * 1000);
+      }
+    }
+
+    document.getElementById('leaderboard').addEventListener('click', (e) => {
+      if (e.target.closest('.confetti-btn')) fireConfetti();
+    });
 
     document.getElementById('press-btn').addEventListener('click', async () => {
       try {

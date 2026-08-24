@@ -1,4 +1,11 @@
 {
   "name": "Cool App",
-  "secrets": []
+  "secrets": [],
+  "tests": [
+    {
+      "name": "Leaderboard shows confetti button on #1",
+      "path": "/",
+      "expectSelector": ".confetti-btn"
+    }
+  ]
 }
