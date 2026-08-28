@@ -219,6 +219,54 @@
       if (window.unNative && unNative.toast) unNative.toast(message);
     }
 
+    /* ── Run photo upload ─────────────────────────────────────────── */
+
+    // The platform does no server-side resizing and rejects anything over
+    // 5MB, and an un-downscaled phone photo routinely exceeds that, so a
+    // picked photo is always re-encoded client-side before it's uploaded.
+    function downscaleImage(file) {
+      return new Promise(function (resolve) {
+        var objectUrl = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function () {
+          URL.revokeObjectURL(objectUrl);
+          var maxEdge = 1600;
+          var scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+          var w = Math.max(1, Math.round(img.width * scale));
+          var h = Math.max(1, Math.round(img.height * scale));
+          var canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          canvas.toBlob(function (blob) {
+            resolve(blob || file);
+          }, 'image/jpeg', 0.85);
+        };
+        img.onerror = function () {
+          URL.revokeObjectURL(objectUrl);
+          // Not every browser can decode every format into an <img> the
+          // same way; fall back to uploading the original rather than
+          // blocking the post over a resize failure.
+          resolve(file);
+        };
+        img.src = objectUrl;
+      });
+    }
+
+    var PHOTO_ERROR_MESSAGES = {
+      file_too_large: 'That photo is too large. Max size is 5MB.',
+      invalid_image: 'That does not look like a photo.',
+      app_quota_exceeded: 'Photo storage is full right now.',
+      user_quota_exceeded: 'You have used up your photo storage.',
+      staging_quota_exceeded: 'Photo storage is full in this preview.',
+      storage_unavailable: 'Photos are not available right now.',
+    };
+
+    function photoErrorMessage(err) {
+      var code = err && (err.code || err.error);
+      return PHOTO_ERROR_MESSAGES[code] || 'That photo could not be uploaded.';
+    }
+
     /* ── Locale-aware dates ────────────────────────────────────────── */
 
     // A language tag can be malformed: some devices report POSIX-style
@@ -297,6 +345,17 @@
         'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="' + g.d + '"/></svg></div>';
     }
 
+    // A run's own photo (if the organizer added one) stands in for the
+    // generated glyph everywhere the glyph would otherwise show.
+    function mediaHtml(run, size) {
+      if (run.photo_url) {
+        var box = size === 'lg' ? 'w-[52px] h-[52px]' : 'w-[52px] h-[52px]';
+        return '<img src="' + esc(run.photo_url) + '" alt="" class="' + box +
+          ' shrink-0 rounded-[14px] object-cover">';
+      }
+      return glyphHtml(run.location, size);
+    }
+
     // The platform exposes usernames, not profile photos, so an initial on
     // a stable color stands in for one.
     var AVATAR_TONES = [
@@ -340,7 +399,7 @@
       }
 
       return '<div class="run-card un-pressable bg-white rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]" role="button" tabindex="0" data-id="' + run.id + '">' +
-        '<div class="flex gap-3">' + glyphHtml(run.location) +
+        '<div class="flex gap-3">' + mediaHtml(run) +
           '<div class="min-w-0 flex-1">' +
             '<h3 class="text-[19px] font-bold leading-tight truncate">' + esc(run.location) + '</h3>' +
             '<div class="mt-1.5 flex items-center gap-2">' + badgeHtml(info) +
@@ -407,9 +466,15 @@
         ? '<p class="mt-1 text-[17px] text-[#8e8e93]">' + esc(run.note) + '</p>'
         : '';
 
+      // Only rendered when the run has a photo; contributes nothing to the
+      // layout otherwise (no placeholder box for photo-less runs).
+      var banner = run.photo_url
+        ? '<img id="detail-photo" src="' + esc(run.photo_url) + '" alt="" class="w-full aspect-[16/9] rounded-2xl object-cover">'
+        : '';
+
       var summary =
         '<div class="bg-white rounded-2xl p-4">' +
-          '<div class="flex gap-3">' + glyphHtml(run.location, 'lg') +
+          '<div class="flex gap-3">' + mediaHtml(run, 'lg') +
             '<div class="min-w-0 flex-1">' +
               '<h2 class="text-[19px] font-bold leading-tight">' + esc(run.location) + '</h2>' +
               '<p class="mt-1 text-[17px] font-semibold text-[#0a7aff]">' + esc(whenText) + '</p>' +
@@ -469,7 +534,7 @@
             ? 'You are organizing this run. Cancel it from the menu if plans change.'
             : 'Join to be counted as going. You can leave anytime.') + '</p>';
 
-      return summary + facts + going + footnote;
+      return banner + summary + facts + going + footnote;
     }
 
     function renderDetail() {
@@ -536,6 +601,19 @@
             '<span class="' + LABEL + '">Note</span>' +
             '<input id="f-note" type="text" maxlength="200" autocomplete="off" placeholder="Optional: easy 5k pace" class="' + FIELD + '">' +
           '</label>' +
+          '<div id="photo-row">' +
+            '<input id="f-photo-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden">' +
+            '<button id="photo-add-btn" type="button" class="un-pressable w-full h-[100px] rounded-2xl border border-dashed border-[#d4d4db] flex flex-col items-center justify-center gap-1.5 text-[#8e8e93]">' +
+              '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l1.8-2.4A1 1 0 019.6 4h4.8a1 1 0 01.8.6L17 7h3a1 1 0 011 1v11a1 1 0 01-1 1H4a1 1 0 01-1-1V8a1 1 0 011-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg>' +
+              '<span class="text-[15px] font-medium">Add photo</span>' +
+            '</button>' +
+            '<div id="photo-preview-wrap" class="hidden relative">' +
+              '<img id="photo-preview" class="w-full h-[140px] rounded-2xl object-cover" alt="">' +
+              '<button id="photo-remove-btn" type="button" aria-label="Remove photo" class="un-touch-target absolute top-2 right-2 w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
+              '</button>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
         '<button id="post-run-btn" type="button" disabled class="mt-5 w-full h-[58px] rounded-2xl bg-[#0a7aff] text-white text-[19px] font-semibold disabled:opacity-40">Post run</button>';
 
@@ -558,6 +636,50 @@
       var when = contentEl.querySelector('#f-when');
       var note = contentEl.querySelector('#f-note');
       var post = contentEl.querySelector('#post-run-btn');
+
+      var photoRow = contentEl.querySelector('#photo-row');
+      var photoAddBtn = contentEl.querySelector('#photo-add-btn');
+      var photoInput = contentEl.querySelector('#f-photo-input');
+      var photoPreviewWrap = contentEl.querySelector('#photo-preview-wrap');
+      var photoPreviewImg = contentEl.querySelector('#photo-preview');
+      var photoRemoveBtn = contentEl.querySelector('#photo-remove-btn');
+      var photo = null; // { url, id } once an upload has succeeded
+
+      // usernode.uploadFile rejects with no platform shell (standalone/dev);
+      // hide the control there instead of offering something that always fails.
+      if (!(window.usernode && usernode.uploadFile)) {
+        photoRow.classList.add('hidden');
+      } else {
+        photoAddBtn.addEventListener('click', function () { photoInput.click(); });
+
+        photoInput.addEventListener('change', function () {
+          var file = photoInput.files && photoInput.files[0];
+          photoInput.value = '';
+          if (!file) return;
+          var label = photoAddBtn.querySelector('span');
+          photoAddBtn.disabled = true;
+          label.textContent = 'Uploading...';
+          downscaleImage(file)
+            .then(function (blob) { return usernode.uploadFile(blob, { visibility: 'public' }); })
+            .then(function (stored) {
+              photo = { url: stored.url, id: stored.id };
+              photoPreviewImg.src = stored.url;
+              photoPreviewWrap.classList.remove('hidden');
+              photoAddBtn.classList.add('hidden');
+            })
+            .catch(function (err) { notify(photoErrorMessage(err)); })
+            .then(function () {
+              photoAddBtn.disabled = false;
+              label.textContent = 'Add photo';
+            });
+        });
+
+        photoRemoveBtn.addEventListener('click', function () {
+          photo = null;
+          photoPreviewWrap.classList.add('hidden');
+          photoAddBtn.classList.remove('hidden');
+        });
+      }
 
       // Default the picker to the next round hour so a poster only has to
       // confirm rather than fill in four fields.
@@ -593,6 +715,8 @@
             location: where.value.trim(),
             note: note.value.trim(),
             starts_at: startsAt.toISOString(),
+            photo_url: photo ? photo.url : undefined,
+            photo_file_id: photo ? photo.id : undefined,
           }),
         }).then(function () {
           handle.dismiss();
@@ -695,11 +819,19 @@
             ],
           }).then(function (res) {
             if (!res || !res.button || res.button.style !== 'destructive') return;
-            return api('/api/runs/' + run.id, { method: 'DELETE' }).then(function () {
-              state.detail = null;
-              setHash('');
-              return loadRuns();
-            }).then(function () { notify('Run cancelled.'); });
+            // Best-effort: an orphaned upload just sits against the app's
+            // quota, which is a smaller problem than a cancel that fails
+            // because the storage call did.
+            var cleanup = (run.photo_file_id && window.usernode && usernode.deleteFile)
+              ? usernode.deleteFile(run.photo_file_id).catch(function () {})
+              : Promise.resolve();
+            return cleanup
+              .then(function () { return api('/api/runs/' + run.id, { method: 'DELETE' }); })
+              .then(function () {
+                state.detail = null;
+                setHash('');
+                return loadRuns();
+              }).then(function () { notify('Run cancelled.'); });
           });
         })
         .catch(function (err) { notify(err.message); });

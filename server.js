@@ -101,6 +101,8 @@ app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
 const MAX_LOCATION = 120;
 const MAX_NOTE = 200;
+const MAX_PHOTO_URL = 500;
+const MAX_PHOTO_FILE_ID = 64;
 // A minute of slack absorbs clock skew between the phone that filled in
 // the picker and this container.
 const FUTURE_SLACK_MS = 60 * 1000;
@@ -111,6 +113,7 @@ const FUTURE_SLACK_MS = 60 * 1000;
 const RUN_SELECT = `
   SELECT r.id, r.location, r.note, r.starts_at,
          r.organizer_id, r.organizer_username,
+         r.photo_url, r.photo_file_id,
          (SELECT COUNT(*) FROM run_attendees a WHERE a.run_id = r.id)::int
            AS attendee_count,
          EXISTS (
@@ -162,6 +165,17 @@ app.post('/api/runs', async (req, res) => {
   if (rawNote.length > MAX_NOTE) {
     return res.status(400).json({ error: 'That note is too long.' });
   }
+  // A run photo is optional, but uploaded via the bridge before this
+  // request is sent, so what arrives here is always the pair of values the
+  // upload returned, never a file. Both present or both absent.
+  const photoUrl = req.body?.photo_url ? String(req.body.photo_url).trim() : '';
+  const photoFileId = req.body?.photo_file_id ? String(req.body.photo_file_id).trim() : '';
+  if (Boolean(photoUrl) !== Boolean(photoFileId)) {
+    return res.status(400).json({ error: 'Photo upload is incomplete.' });
+  }
+  if (photoUrl.length > MAX_PHOTO_URL || photoFileId.length > MAX_PHOTO_FILE_ID) {
+    return res.status(400).json({ error: 'That photo reference is too long.' });
+  }
   if (isNaN(startsAt.getTime())) {
     return res.status(400).json({ error: 'Pick a date and time.' });
   }
@@ -175,9 +189,17 @@ app.post('/api/runs', async (req, res) => {
     // together or not at all.
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [location, rawNote || null, startsAt.toISOString(), req.user.id, req.user.username]
+      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [
+        location,
+        rawNote || null,
+        startsAt.toISOString(),
+        req.user.id,
+        req.user.username,
+        photoUrl || null,
+        photoFileId || null,
+      ]
     );
     const id = rows[0].id;
     await client.query(
@@ -318,6 +340,13 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Platform-stored files are not cloned into staging, so a seeded run can't
+// point at a real /app-files/ URL. An inline SVG data URI renders exactly
+// like a real photo would, without depending on file storage, so the new
+// photo UI (list thumbnail, detail banner) has something to render in
+// every preview and in the "Run detail shows the seeded photo" check.
+const SEED_PHOTO_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 225'%3E%3Crect width='400' height='225' fill='%2323a455'/%3E%3Ctext x='200' y='120' font-size='24' fill='white' text-anchor='middle' font-family='sans-serif'%3EStaging demo photo%3C/text%3E%3C/svg%3E";
+
 // Seeded run ids live far above anything the app will ever allocate, so a
 // re-boot can address the same demo rows by id.
 const SEED_RUNS = [
@@ -330,6 +359,7 @@ const SEED_RUNS = [
     minute: 30,
     organizer: [-901, 'staging-demo-maya'],
     joiners: [[-902, 'staging-demo-ethan'], [-903, 'staging-demo-nina']],
+    photoUrl: SEED_PHOTO_URL,
   },
   {
     id: 900002,
@@ -369,8 +399,8 @@ function seedStartsAt(dayOffset, hour, minute) {
 async function seedStaging() {
   for (const run of SEED_RUNS) {
     await pool.query(
-      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (id) DO UPDATE SET starts_at = EXCLUDED.starts_at`,
       [
         run.id,
@@ -379,6 +409,7 @@ async function seedStaging() {
         seedStartsAt(run.dayOffset, run.hour, run.minute),
         run.organizer[0],
         run.organizer[1],
+        run.photoUrl || null,
       ]
     );
     for (const [userId, username] of [run.organizer, ...run.joiners]) {
@@ -412,6 +443,14 @@ async function migrate() {
       organizer_username VARCHAR(255) NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
+  `);
+  // Both nullable: a run photo is optional, and existing runs predate the
+  // column. `photo_file_id` is kept only so the organizer's client can
+  // free the upload via usernode.deleteFile when they cancel the run.
+  await pool.query(`
+    ALTER TABLE runs
+      ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500),
+      ADD COLUMN IF NOT EXISTS photo_file_id VARCHAR(64)
   `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS run_attendees (
