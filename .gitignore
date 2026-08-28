@@ -1,0 +1,7 @@
+# Installed by npm at build time, never committed.
+node_modules/
+package-lock.json
+
+# Compiled by the Dockerfile's builder stage on every image build. The repo
+# deliberately ships no CSS artifact; see tailwind.config.js.
+public/tailwind.css

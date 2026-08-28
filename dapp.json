@@ -1,11 +1,22 @@
 {
-  "name": "Cool App",
+  "name": "Run Club",
+  "icon": { "emoji": "🏃" },
   "secrets": [],
   "tests": [
     {
-      "name": "Leaderboard shows confetti button on #1",
+      "name": "Home lists upcoming runs",
       "path": "/",
-      "expectSelector": ".confetti-btn"
+      "expectText": "Staging demo: Riverside Park"
+    },
+    {
+      "name": "New Run sheet opens",
+      "path": "/#new",
+      "expectSelector": "#post-run-btn"
+    },
+    {
+      "name": "Run details shows Who's Going",
+      "path": "/#run/900001",
+      "expectText": "staging-demo-maya"
     }
   ]
 }
