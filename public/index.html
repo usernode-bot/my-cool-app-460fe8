@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   
   <script>
   // usernode-dev-console@1
@@ -63,130 +63,723 @@
     try { post('info', ['[dev-console ready]'], { kind: 'ready' }); } catch (_) {}
   })();
   </script>
-  <title>my-cool-app</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%237c3aed'/><circle cx='50' cy='50' r='18' fill='white'/></svg>">
-  <!-- Tailwind, PRECOMPILED for this app (was cdn.tailwindcss.com's
-       in-browser engine plus an inline tailwind.config here). The config
-       moved to tailwind.config.js in the repo root; the Dockerfile's builder
-       stage compiles it to public/tailwind.css on every image build, so the
+  <title>Run Club</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%230a7aff'/><text x='50' y='68' font-size='52' text-anchor='middle'>%F0%9F%8F%83</text></svg>">
+
+  <!-- Tailwind, PRECOMPILED for this app. The config lives in
+       tailwind.config.js at the repo root; the Dockerfile's builder stage
+       compiles it to public/tailwind.css on every image build, so the
        stylesheet is regenerated from THIS commit's markup every deploy and
-       can never drift behind the code. ~7 KB of CSS instead of a ~400 KB
-       engine, and no flash of unstyled content.
+       can never drift behind the code.
        Writing class names as whole literals is what keeps this working — a
        class assembled from fragments at runtime (e.g. "bg-" + tone + "-500")
-       is invisible to the compiler. If you genuinely need runtime-generated
-       classes, swap this link for the platform-hosted engine instead:
-       <script src="https://social-vibecoding.usernodelabs.org/usernode-tailwind/v1/tailwind.js"></script> -->
+       is invisible to the compiler. -->
   <link rel="stylesheet" href="/tailwind.css">
+
+  <!-- usernode-native UI kit, loaded AFTER tailwind.css so its component
+       styles win over Tailwind's preflight reset. Centrally hosted: never
+       vendor these, so kit fixes reach this app on the next page load. -->
+  <link rel="stylesheet" href="https://social-vibecoding.usernodelabs.org/usernode-native/v1/native.css">
+  <script src="https://social-vibecoding.usernodelabs.org/usernode-native/v1/native.js"></script>
+
+  <!-- The platform bridge. Required whether or not this app calls a bridge
+       API: it is also how the app answers the shell. -->
+  <script src="https://social-vibecoding.usernodelabs.org/usernode-bridge/v1/bridge.js"></script>
+
   <style>
-    #confetti-overlay {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      overflow: hidden;
-      z-index: 9999;
+    /* Re-theme the kit to Run Club's blue. Physics and geometry stay the
+       kit's; only the color tokens are ours. */
+    :root {
+      --un-accent: #0a7aff;
+      --un-accent-contrast: #ffffff;
+      --un-group-bg: #ffffff;
+      --un-sheet-bg: #ffffff;
+      --un-hairline: #ececf0;
+      --un-muted: #8e8e93;
+      --un-radius-card: 16px;
     }
-    .confetti-piece {
-      position: absolute;
-      top: -12px;
-      width: 8px;
-      height: 14px;
-      opacity: 0.95;
-      animation: confetti-fall linear forwards;
+    /* Native date/time controls inherit the row's typography instead of
+       the browser default, so the When row reads like the other two. */
+    input[type="date"], input[type="time"] {
+      font: inherit;
+      color: inherit;
+      background: transparent;
+      -webkit-appearance: none;
+      appearance: none;
+      min-width: 0;
     }
-    @keyframes confetti-fall {
-      0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-      100% { transform: translateY(110vh) rotate(720deg); opacity: 0.3; }
-    }
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.35; }
+    input[type="date"]:invalid, input[type="time"]:invalid { color: #b6b6bd; }
   </style>
 </head>
-<body class="bg-zinc-50 text-zinc-900 min-h-screen flex flex-col items-center justify-center gap-8 p-4">
-  <h1 class="text-2xl font-bold">my-cool-app</h1>
+<body class="bg-[#f2f2f7] text-[#111114] antialiased">
+  <!-- Safe-area top inset: bare env() is 0px inside the platform frame, so
+       the bridge-forwarded custom property comes first with env() as the
+       standalone fallback. -->
+  <div id="app" class="mx-auto w-full max-w-[560px]"
+       style="padding-top: calc(var(--un-safe-inset-top, env(safe-area-inset-top, 0px)) + 14px);
+              padding-bottom: calc(var(--un-safe-inset-bottom, env(safe-area-inset-bottom, 0px)));">
 
-  <button id="press-btn" class="w-32 h-32 rounded-full bg-violet-600 hover:bg-violet-500 active:scale-95 transition-all text-white text-xl font-bold shadow-lg shadow-violet-600/30">
-    Press!
-  </button>
+    <!-- ── Home ─────────────────────────────────────────────────────── -->
+    <section id="screen-home" class="px-5 pb-24">
+      <header class="flex items-start justify-between gap-4">
+        <h1 class="text-[40px] font-extrabold tracking-tight leading-none pt-1">Run Club</h1>
+        <button id="new-run-btn" type="button" aria-label="Post a new run"
+          class="un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </button>
+      </header>
 
-  <div id="count" class="text-lg text-zinc-500">0 total presses</div>
+      <div class="mt-6 grid grid-cols-2 gap-1 p-1 bg-[#e5e5ea] rounded-[14px]">
+        <button id="tab-upcoming" type="button" data-tab="upcoming"
+          class="rounded-[11px] py-2.5 text-[17px] font-medium bg-white text-[#111114] shadow-[0_1px_3px_rgba(0,0,0,0.08)]">Upcoming</button>
+        <button id="tab-past" type="button" data-tab="past"
+          class="rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#8e8e93] shadow-none">Past</button>
+      </div>
 
-  <div class="w-full max-w-sm">
-    <h2 class="text-sm font-medium text-zinc-600 mb-2 text-center">Leaderboard</h2>
-    <div id="leaderboard" class="space-y-1"></div>
+      <h2 id="list-heading" class="mt-6 mb-3 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93]">UPCOMING RUNS</h2>
+      <div id="run-list" class="space-y-3"></div>
+    </section>
+
+    <!-- ── Run details ──────────────────────────────────────────────── -->
+    <section id="screen-detail" class="px-5 pb-24 hidden">
+      <header class="flex items-center justify-between">
+        <button id="back-btn" type="button" aria-label="Back"
+          class="un-touch-target w-[52px] h-[52px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 5l-7 7 7 7"/>
+          </svg>
+        </button>
+        <button id="more-btn" type="button" aria-label="More options"
+          class="un-touch-target w-[52px] h-[52px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+          </svg>
+        </button>
+      </header>
+      <h1 class="mt-4 text-[40px] font-extrabold tracking-tight leading-none">Run details</h1>
+      <div id="detail-body" class="mt-6 space-y-6"></div>
+    </section>
+
   </div>
 
   <script>
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token') || '';
-    const headers = token ? { 'x-usernode-token': token } : {};
+  (function () {
+    'use strict';
 
-    async function loadLeaderboard() {
-      const res = await fetch('/api/leaderboard', { headers });
-      if (!res.ok) return;
-      const { leaderboard } = await res.json();
-      const el = document.getElementById('leaderboard');
-      if (!leaderboard.length) {
-        el.innerHTML = '<p class="text-center text-zinc-500 text-sm">No presses yet</p>';
+    var params = new URLSearchParams(window.location.search);
+    var token = params.get('token') || '';
+    var authHeaders = token ? { 'x-usernode-token': token } : {};
+
+    var homeEl = document.getElementById('screen-home');
+    var detailEl = document.getElementById('screen-detail');
+    var listEl = document.getElementById('run-list');
+    var headingEl = document.getElementById('list-heading');
+    var detailBodyEl = document.getElementById('detail-body');
+
+    var state = {
+      tab: 'upcoming',
+      runs: [],
+      detail: null,      // { run, attendees }
+      screen: 'home',
+      sheet: null,
+      me: null,          // resolved from the first API response we own
+    };
+
+    /* ── Small helpers ─────────────────────────────────────────────── */
+
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function hash(s) {
+      var h = 0;
+      for (var i = 0; i < String(s).length; i++) h = (h * 31 + String(s).charCodeAt(i)) >>> 0;
+      return h;
+    }
+
+    function api(url, opts) {
+      var o = opts || {};
+      var headers = Object.assign({}, authHeaders, o.headers || {});
+      if (o.body) headers['Content-Type'] = 'application/json';
+      return fetch(url, Object.assign({}, o, { headers: headers })).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) {
+          if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+          return data;
+        });
+      });
+    }
+
+    function notify(message) {
+      if (window.unNative && unNative.toast) unNative.toast(message);
+    }
+
+    /* ── Locale-aware dates ────────────────────────────────────────── */
+
+    // A language tag can be malformed: some devices report POSIX-style
+    // values like "en-US@posix", and a stored platform preference is just a
+    // string. Intl throws a RangeError on those, which would take every
+    // date on the screen down with it, so keep only tags Intl accepts and
+    // fall back to the runtime default (undefined) otherwise.
+    function safeLocale(tag) {
+      if (!tag) return undefined;
+      try {
+        new Intl.DateTimeFormat(tag);
+        return tag;
+      } catch (err) {
+        return undefined;
+      }
+    }
+
+    var locale = safeLocale(navigator.language);
+    if (window.usernode && usernode.getUserLocale) {
+      usernode.getUserLocale().then(function (r) {
+        // null means "no preference set", not English: keep the device
+        // language in that case.
+        var next = r && r.locale ? safeLocale(r.locale) : undefined;
+        if (next) { locale = next; render(); }
+      }).catch(function () {});
+    }
+
+    function fmtTime(d) {
+      return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(d);
+    }
+
+    // Today / Tomorrow / Yesterday where they apply, a short date otherwise.
+    function dayInfo(d) {
+      var today = new Date(); today.setHours(0, 0, 0, 0);
+      var that = new Date(d); that.setHours(0, 0, 0, 0);
+      var days = Math.round((that.getTime() - today.getTime()) / 86400000);
+      if (days === 0) return { label: 'Today', tone: 'today' };
+      if (days === 1) return { label: 'Tomorrow', tone: 'tomorrow' };
+      if (days === -1) return { label: 'Yesterday', tone: 'plain' };
+      return {
+        label: new Intl.DateTimeFormat(locale, {
+          weekday: 'short', month: 'short', day: 'numeric',
+        }).format(d),
+        tone: 'plain',
+      };
+    }
+
+    function badgeHtml(info) {
+      if (info.tone === 'today') {
+        return '<span class="px-2 py-0.5 rounded-md bg-[#d7f5de] text-[#1b8a3d] text-[16px] font-semibold">' + esc(info.label) + '</span>';
+      }
+      if (info.tone === 'tomorrow') {
+        return '<span class="px-2 py-0.5 rounded-md bg-[#dbeafe] text-[#0a7aff] text-[16px] font-semibold">' + esc(info.label) + '</span>';
+      }
+      return '<span class="text-[16px] font-semibold text-[#111114]">' + esc(info.label) + '</span>';
+    }
+
+    /* ── Location glyphs and avatars ───────────────────────────────── */
+
+    // Whole-literal class strings: Tailwind's extractor is a regex over
+    // this file, so an assembled "bg-[" + hex + "]" would never compile.
+    var GLYPHS = [
+      { bg: 'bg-[#dcf5e3]', fg: 'text-[#23a455]', d: 'M12 3l4 6h-2.5l3 5H14l3 5H7l3-5H7.5l3-5H8l4-6zM12 19v2' },
+      { bg: 'bg-[#dbeafe]', fg: 'text-[#2b7fff]', d: 'M3 8c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 13c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 18c2-2 4-2 6 0s4 2 6 0 4-2 6 0' },
+      { bg: 'bg-[#ede4ff]', fg: 'text-[#8b5cf6]', d: 'M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z' },
+      { bg: 'bg-[#ffe8d5]', fg: 'text-[#f97316]', d: 'M12 5c5 0 9 3.1 9 7s-4 7-9 7-9-3.1-9-7 4-7 9-7zm0 4c2.2 0 4 1.3 4 3s-1.8 3-4 3-4-1.3-4-3 1.8-3 4-3z' },
+      { bg: 'bg-[#ffe1ee]', fg: 'text-[#ec4899]', d: 'M3 19l6-10 4 6 2.5-4L21 19H3z' },
+    ];
+
+    function glyphHtml(location, size) {
+      var g = GLYPHS[hash(location) % GLYPHS.length];
+      var box = size === 'lg' ? 'w-[52px] h-[52px]' : 'w-[52px] h-[52px]';
+      return '<div class="' + box + ' shrink-0 rounded-[14px] ' + g.bg + ' ' + g.fg +
+        ' flex items-center justify-center">' +
+        '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+        'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="' + g.d + '"/></svg></div>';
+    }
+
+    // The platform exposes usernames, not profile photos, so an initial on
+    // a stable color stands in for one.
+    var AVATAR_TONES = [
+      'bg-[#f97316]', 'bg-[#0a7aff]', 'bg-[#22c55e]',
+      'bg-[#a855f7]', 'bg-[#ec4899]', 'bg-[#14b8a6]',
+    ];
+
+    function avatarHtml(username, size, ring) {
+      var tone = AVATAR_TONES[hash(username) % AVATAR_TONES.length];
+      var dims = size === 'lg'
+        ? 'w-11 h-11 text-[18px]'
+        : (size === 'md' ? 'w-9 h-9 text-[15px]' : 'w-8 h-8 text-[13px]');
+      var initial = String(username || '?').trim().charAt(0).toUpperCase() || '?';
+      return '<span title="' + esc(username) + '" class="' + dims + ' ' + tone +
+        ' shrink-0 rounded-full text-white font-semibold flex items-center justify-center' +
+        (ring ? ' ring-2 ring-white' : '') + '">' + esc(initial) + '</span>';
+    }
+
+    function clusterHtml(names) {
+      if (!names || !names.length) return '';
+      return '<div class="flex items-center -space-x-2">' +
+        names.map(function (n) { return avatarHtml(n, 'sm', true); }).join('') + '</div>';
+    }
+
+    /* ── Home list ─────────────────────────────────────────────────── */
+
+    function cardHtml(run) {
+      var past = state.tab === 'past';
+      var when = new Date(run.starts_at);
+      var info = dayInfo(when);
+      var count = run.attendee_count || 0;
+      var note = run.note
+        ? '<p class="mt-1 text-[17px] text-[#8e8e93] truncate">' + esc(run.note) + '</p>'
+        : '';
+
+      var action = '';
+      if (!past) {
+        action = run.joined
+          ? '<button type="button" class="join-btn shrink-0 px-5 py-2.5 rounded-full bg-[#e9e9ef] text-[#8e8e93] text-[17px] font-semibold" data-id="' + run.id + '" data-joined="1">Joined</button>'
+          : '<button type="button" class="join-btn shrink-0 px-6 py-2.5 rounded-full bg-[#0a7aff] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0">Join</button>';
+      }
+
+      return '<div class="run-card un-pressable bg-white rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]" role="button" tabindex="0" data-id="' + run.id + '">' +
+        '<div class="flex gap-3">' + glyphHtml(run.location) +
+          '<div class="min-w-0 flex-1">' +
+            '<h3 class="text-[19px] font-bold leading-tight truncate">' + esc(run.location) + '</h3>' +
+            '<div class="mt-1.5 flex items-center gap-2">' + badgeHtml(info) +
+              '<span class="text-[17px] text-[#8e8e93]">' + esc(fmtTime(when)) + '</span></div>' +
+            note +
+          '</div>' +
+        '</div>' +
+        '<div class="mt-3.5 flex items-center justify-between gap-3">' +
+          '<div class="flex items-center min-w-0">' + clusterHtml(run.preview) +
+            '<span class="ml-2 text-[17px] text-[#8e8e93] truncate">' + count + ' ' + (past ? 'went' : 'going') + '</span>' +
+          '</div>' + action +
+        '</div>' +
+      '</div>';
+    }
+
+    function renderList() {
+      headingEl.textContent = state.tab === 'past' ? 'PAST RUNS' : 'UPCOMING RUNS';
+      if (!state.runs.length) {
+        listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#8e8e93]">' +
+          (state.tab === 'past'
+            ? 'No past runs yet.'
+            : 'No upcoming runs. Tap + to post one.') + '</p>';
         return;
       }
-      const RANK_STYLES = [
-        { cls: 'bg-violet-600/20 text-violet-700 font-semibold', medal: '🥇 ' },
-        { cls: 'bg-zinc-200/60 text-zinc-700', medal: '🥈 ' },
-        { cls: 'bg-amber-100/70 text-amber-800', medal: '🥉 ' },
-      ];
-      el.innerHTML = leaderboard.map((r, i) => {
-        const rank = RANK_STYLES[i];
-        const cls = rank ? rank.cls : 'text-zinc-600';
-        const label = rank ? rank.medal + r.username : (i + 1) + '. ' + r.username;
-        const confettiBtn = i === 0
-          ? '<button class="confetti-btn ml-2 leading-none hover:scale-110 active:scale-95 transition-transform" aria-label="Celebrate #1">🎉</button>'
+      listEl.innerHTML = state.runs.map(cardHtml).join('');
+    }
+
+    var TAB_ON = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-white text-[#111114] shadow-[0_1px_3px_rgba(0,0,0,0.08)]';
+    var TAB_OFF = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#8e8e93] shadow-none';
+
+    function renderTabs() {
+      document.getElementById('tab-upcoming').className =
+        state.tab === 'upcoming' ? TAB_ON : TAB_OFF;
+      document.getElementById('tab-past').className =
+        state.tab === 'past' ? TAB_ON : TAB_OFF;
+    }
+
+    function loadRuns() {
+      return api('/api/runs?filter=' + state.tab).then(function (data) {
+        state.runs = data.runs || [];
+        renderList();
+      }).catch(function (err) {
+        notify(err.message);
+      });
+    }
+
+    /* ── Run details ───────────────────────────────────────────────── */
+
+    function detailHtml(run, attendees) {
+      var when = new Date(run.starts_at);
+      var info = dayInfo(when);
+      var whenText = info.label + ' · ' + fmtTime(when);
+      var isPast = when.getTime() < Date.now();
+      var count = run.attendee_count || 0;
+
+      var action = '';
+      if (!isPast && !run.is_organizer) {
+        action = run.joined
+          ? '<button id="detail-action" type="button" data-action="leave" class="shrink-0 px-6 py-2.5 rounded-full bg-[#e9e9ef] text-[#6b6b73] text-[17px] font-semibold">Leave</button>'
+          : '<button id="detail-action" type="button" data-action="join" class="shrink-0 px-7 py-2.5 rounded-full bg-[#0a7aff] text-white text-[17px] font-semibold">Join</button>';
+      }
+
+      var note = run.note
+        ? '<p class="mt-1 text-[17px] text-[#8e8e93]">' + esc(run.note) + '</p>'
+        : '';
+
+      var summary =
+        '<div class="bg-white rounded-2xl p-4">' +
+          '<div class="flex gap-3">' + glyphHtml(run.location, 'lg') +
+            '<div class="min-w-0 flex-1">' +
+              '<h2 class="text-[19px] font-bold leading-tight">' + esc(run.location) + '</h2>' +
+              '<p class="mt-1 text-[17px] font-semibold text-[#0a7aff]">' + esc(whenText) + '</p>' +
+              note +
+            '</div>' +
+          '</div>' +
+          '<div class="mt-4 pt-4 border-t border-[#ececf0] flex items-center justify-between gap-3">' +
+            '<div class="flex items-center gap-3 min-w-0">' + avatarHtml(run.organizer_username, 'lg') +
+              '<span class="min-w-0 text-[17px] leading-snug text-[#8e8e93] break-words">Organized by ' + esc(run.organizer_username) + '</span>' +
+            '</div>' + action +
+          '</div>' +
+        '</div>';
+
+      // `wrap` lets a long value run onto a second line instead of being cut
+      // off; the short ones stay on a single right-aligned line.
+      function infoRow(iconPath, label, value, blue, wrap) {
+        return '<div class="flex items-center gap-3 px-4 py-4">' +
+          '<svg class="shrink-0 text-[#0a7aff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="' + iconPath + '"/></svg>' +
+          '<span class="shrink-0 text-[19px] font-medium">' + esc(label) + '</span>' +
+          '<span class="ml-auto min-w-0 text-[19px] text-right ' + (wrap ? '' : 'truncate ') + (blue ? 'text-[#0a7aff] font-medium' : 'text-[#8e8e93]') + '">' + esc(value) + '</span>' +
+        '</div>';
+      }
+
+      var PIN = 'M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z';
+      var CAL = 'M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4';
+      var PEOPLE = 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6 6 0 0112 0M17.5 11.5a3 3 0 100-6M18 20a5.5 5.5 0 00-2-4.3';
+
+      var facts = '<div class="bg-white rounded-2xl divide-y divide-[#ececf0]">' +
+        infoRow(PIN, 'Where', run.location, false, true) +
+        infoRow(CAL, 'When', whenText, true) +
+        infoRow(PEOPLE, 'Going', count + (count === 1 ? ' runner' : ' runners'), false) +
+      '</div>';
+
+      var rows = (attendees || []).map(function (a) {
+        var badge = a.is_organizer
+          ? '<span class="px-2 py-0.5 rounded-md bg-[#dbeafe] text-[#0a7aff] text-[14px] font-semibold">Organizer</span>'
           : '';
-        return '<div class="flex justify-between items-center px-3 py-1 rounded ' + cls + '">' +
-          '<span class="flex items-center">' + label + confettiBtn + '</span>' +
-          '<span class="font-mono">' + r.presses + '</span></div>';
+        return '<div class="flex items-center gap-3 px-4 py-3.5">' +
+          avatarHtml(a.username, 'lg') +
+          '<span class="min-w-0 flex-1 text-[19px] font-medium truncate">' + esc(a.username) + '</span>' +
+          badge +
+        '</div>';
       }).join('');
-      const total = leaderboard.reduce((s, r) => s + parseInt(r.presses), 0);
-      document.getElementById('count').textContent = total + ' total presses';
+
+      var going = '<div>' +
+        '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93]">WHO\'S GOING</h3>' +
+        (rows
+          ? '<div class="bg-white rounded-2xl divide-y divide-[#ececf0]">' + rows + '</div>'
+          : '<div class="bg-white rounded-2xl px-4 py-8 text-center text-[17px] text-[#8e8e93]">Nobody has joined yet.</div>') +
+      '</div>';
+
+      var footnote = '<p class="flex items-start gap-2 px-1 pb-2 text-[15px] leading-snug text-[#8e8e93]">' +
+        '<svg class="mt-0.5 shrink-0 text-[#0a7aff]" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.1"/></svg>' +
+        (isPast
+          ? 'This run has already happened.'
+          : run.is_organizer
+            ? 'You are organizing this run. Cancel it from the menu if plans change.'
+            : 'Join to be counted as going. You can leave anytime.') + '</p>';
+
+      return summary + facts + going + footnote;
     }
 
-    const CONFETTI_COLORS = ['#7c3aed', '#f59e0b', '#ef4444', '#10b981', '#3b82f6', '#ec4899'];
-
-    function fireConfetti() {
-      let overlay = document.getElementById('confetti-overlay');
-      if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'confetti-overlay';
-        document.body.appendChild(overlay);
-      }
-      const pieceCount = 80;
-      for (let i = 0; i < pieceCount; i++) {
-        const piece = document.createElement('div');
-        piece.className = 'confetti-piece';
-        piece.style.left = Math.random() * 100 + 'vw';
-        piece.style.backgroundColor = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
-        const duration = 1.6 + Math.random() * 1.2;
-        piece.style.animationDuration = duration + 's';
-        piece.style.animationDelay = (Math.random() * 0.3) + 's';
-        overlay.appendChild(piece);
-        setTimeout(() => piece.remove(), (duration + 0.3) * 1000);
-      }
+    function renderDetail() {
+      if (!state.detail) return;
+      detailBodyEl.innerHTML = detailHtml(state.detail.run, state.detail.attendees);
     }
 
-    document.getElementById('leaderboard').addEventListener('click', (e) => {
-      if (e.target.closest('.confetti-btn')) fireConfetti();
-    });
+    function loadDetail(id) {
+      return api('/api/runs/' + id).then(function (data) {
+        state.detail = { run: data.run, attendees: data.attendees || [] };
+        return state.detail;
+      });
+    }
 
-    document.getElementById('press-btn').addEventListener('click', async () => {
-      try {
-        const res = await fetch('/api/press', {
+    function render() {
+      renderTabs();
+      renderList();
+      renderDetail();
+    }
+
+    /* ── Screen switching ──────────────────────────────────────────── */
+
+    function showScreen(name, type) {
+      if (state.screen === name) return;
+      state.screen = name;
+      var apply = function () {
+        homeEl.classList.toggle('hidden', name !== 'home');
+        detailEl.classList.toggle('hidden', name !== 'detail');
+        window.scrollTo(0, 0);
+      };
+      if (window.unNative && unNative.transition) unNative.transition(apply, { type: type || 'none' });
+      else apply();
+    }
+
+    /* ── New Run sheet ─────────────────────────────────────────────── */
+
+    function buildSheet() {
+      var wrap = document.createElement('div');
+      wrap.className = 'pb-1';
+      var ROW = 'flex items-center gap-3 rounded-2xl border border-[#e4e4ea] px-4 py-4';
+      var LABEL = 'shrink-0 w-[64px] text-[17px] text-[#6b6b73]';
+      var FIELD = 'flex-1 min-w-0 bg-transparent outline-none text-[17px] text-[#111114] placeholder:text-[#b6b6bd]';
+
+      wrap.innerHTML =
+        '<div class="flex items-center justify-between gap-3">' +
+          '<h2 class="text-[30px] font-extrabold tracking-tight">New Run</h2>' +
+          '<button id="sheet-close" type="button" aria-label="Close" class="un-touch-target shrink-0 w-9 h-9 rounded-full bg-[#e9e9ef] text-[#8e8e93] flex items-center justify-center">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
+          '</button>' +
+        '</div>' +
+        '<div class="mt-5 space-y-3">' +
+          '<label class="' + ROW + '">' +
+            '<svg class="shrink-0 text-[#23a455]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
+            '<span class="' + LABEL + '">Where</span>' +
+            '<input id="f-where" type="text" maxlength="120" autocomplete="off" placeholder="e.g. Riverside Park" class="' + FIELD + '">' +
+          '</label>' +
+          '<div class="' + ROW + '">' +
+            '<svg class="shrink-0 text-[#0a7aff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4"/></svg>' +
+            '<span class="' + LABEL + '">When</span>' +
+            '<input id="f-when" type="datetime-local" required aria-label="Date and time" class="' + FIELD + ' text-right">' +
+          '</div>' +
+          '<label class="' + ROW + '">' +
+            '<svg class="shrink-0 text-[#8b5cf6]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5zM14 3v5h5"/></svg>' +
+            '<span class="' + LABEL + '">Note</span>' +
+            '<input id="f-note" type="text" maxlength="200" autocomplete="off" placeholder="Optional: easy 5k pace" class="' + FIELD + '">' +
+          '</label>' +
+        '</div>' +
+        '<button id="post-run-btn" type="button" disabled class="mt-5 w-full h-[58px] rounded-2xl bg-[#0a7aff] text-white text-[19px] font-semibold disabled:opacity-40">Post run</button>';
+
+      return wrap;
+    }
+
+    function openSheet() {
+      if (state.sheet) return;
+      var contentEl = buildSheet();
+      var handle = unNative.presentSheet({
+        contentEl: contentEl,
+        onDismiss: function () {
+          state.sheet = null;
+          if (location.hash === '#new') setHash('');
+        },
+      });
+      state.sheet = handle;
+
+      var where = contentEl.querySelector('#f-where');
+      var when = contentEl.querySelector('#f-when');
+      var note = contentEl.querySelector('#f-note');
+      var post = contentEl.querySelector('#post-run-btn');
+
+      // Default the picker to the next round hour so a poster only has to
+      // confirm rather than fill in four fields.
+      var soon = new Date(Date.now() + 60 * 60 * 1000);
+      soon.setMinutes(0, 0, 0);
+      var pad = function (n) { return String(n).padStart(2, '0'); };
+      // datetime-local wants local wall-clock time, never an ISO/UTC string.
+      when.value = soon.getFullYear() + '-' + pad(soon.getMonth() + 1) + '-' +
+        pad(soon.getDate()) + 'T' + pad(soon.getHours()) + ':' + pad(soon.getMinutes());
+
+      function sync() {
+        post.disabled = !(where.value.trim() && when.value);
+      }
+      [where, when].forEach(function (el) {
+        el.addEventListener('input', sync);
+        el.addEventListener('change', sync);
+      });
+      sync();
+
+      contentEl.querySelector('#sheet-close').addEventListener('click', function () {
+        handle.dismiss();
+      });
+
+      post.addEventListener('click', function () {
+        if (post.disabled) return;
+        var startsAt = new Date(when.value);
+        if (isNaN(startsAt.getTime())) { notify('Pick a date and time.'); return; }
+        post.disabled = true;
+        post.textContent = 'Posting...';
+        api('/api/runs', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({
+            location: where.value.trim(),
+            note: note.value.trim(),
+            starts_at: startsAt.toISOString(),
+          }),
+        }).then(function () {
+          handle.dismiss();
+          state.tab = 'upcoming';
+          renderTabs();
+          return loadRuns();
+        }).then(function () {
+          notify('Run posted.');
+        }).catch(function (err) {
+          post.disabled = false;
+          post.textContent = 'Post run';
+          notify(err.message);
         });
-        if (res.ok) loadLeaderboard();
-        else if (res.status === 401) document.getElementById('count').textContent = 'Sign in to press!';
-      } catch {}
+      });
+
+      where.focus({ preventScroll: true });
+    }
+
+    /* ── Actions ───────────────────────────────────────────────────── */
+
+    function joinRun(id) {
+      return api('/api/runs/' + id + '/join', { method: 'POST' });
+    }
+
+    function leaveRun(id) {
+      return api('/api/runs/' + id + '/leave', { method: 'POST' });
+    }
+
+    function refreshBoth(id) {
+      var jobs = [loadRuns()];
+      if (id != null && state.detail && state.detail.run.id === id) {
+        jobs.push(loadDetail(id).then(renderDetail));
+      }
+      return Promise.all(jobs);
+    }
+
+    listEl.addEventListener('click', function (e) {
+      var join = e.target.closest('.join-btn');
+      if (join) {
+        // The card underneath is itself a button; stop the tap here so a
+        // join does not also navigate.
+        e.stopPropagation();
+        if (join.dataset.joined === '1') return;
+        join.disabled = true;
+        joinRun(parseInt(join.dataset.id, 10))
+          .then(function () { return loadRuns(); })
+          .catch(function (err) { join.disabled = false; notify(err.message); });
+        return;
+      }
+      var card = e.target.closest('.run-card');
+      if (card) setHash('run/' + card.dataset.id);
     });
 
-    loadLeaderboard();
+    listEl.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var card = e.target.closest('.run-card');
+      if (card) { e.preventDefault(); setHash('run/' + card.dataset.id); }
+    });
+
+    detailBodyEl.addEventListener('click', function (e) {
+      var btn = e.target.closest('#detail-action');
+      if (!btn || !state.detail) return;
+      var id = state.detail.run.id;
+      var leaving = btn.dataset.action === 'leave';
+      btn.disabled = true;
+      (leaving ? leaveRun(id) : joinRun(id))
+        .then(function () { return refreshBoth(id); })
+        .then(function () { notify(leaving ? 'You left this run.' : 'You are going.'); })
+        .catch(function (err) { btn.disabled = false; notify(err.message); });
+    });
+
+    document.getElementById('more-btn').addEventListener('click', function (e) {
+      if (!state.detail) return;
+      var run = state.detail.run;
+      var isPast = new Date(run.starts_at).getTime() < Date.now();
+      var items = [];
+      if (!isPast && run.is_organizer) {
+        items.push({ label: 'Cancel run', destructive: true, value: 'cancel', icon: 'trash' });
+      } else if (!isPast && run.joined) {
+        items.push({ label: 'Leave run', destructive: true, value: 'leave' });
+      }
+      if (!items.length) {
+        notify(isPast ? 'This run has already happened.' : 'Nothing to do here yet.');
+        return;
+      }
+      unNative.menu({ anchorEl: e.currentTarget, items: items, cancelLabel: 'Cancel' })
+        .then(function (choice) {
+          if (!choice) return;
+          if (choice.value === 'leave') {
+            return leaveRun(run.id)
+              .then(function () { return refreshBoth(run.id); })
+              .then(function () { notify('You left this run.'); });
+          }
+          return unNative.alert({
+            title: 'Cancel this run?',
+            message: 'Everyone who joined will lose it. This cannot be undone.',
+            buttons: [
+              { label: 'Keep it', style: 'cancel' },
+              { label: 'Cancel run', style: 'destructive' },
+            ],
+          }).then(function (res) {
+            if (!res || !res.button || res.button.style !== 'destructive') return;
+            return api('/api/runs/' + run.id, { method: 'DELETE' }).then(function () {
+              state.detail = null;
+              setHash('');
+              return loadRuns();
+            }).then(function () { notify('Run cancelled.'); });
+          });
+        })
+        .catch(function (err) { notify(err.message); });
+    });
+
+    document.getElementById('new-run-btn').addEventListener('click', function () {
+      setHash('new');
+    });
+
+    document.getElementById('back-btn').addEventListener('click', function () {
+      setHash('');
+    });
+
+    [['tab-upcoming', 'upcoming'], ['tab-past', 'past']].forEach(function (pair) {
+      document.getElementById(pair[0]).addEventListener('click', function () {
+        if (state.tab === pair[1]) return;
+        state.tab = pair[1];
+        state.runs = [];
+        renderTabs();
+        renderList();
+        loadRuns();
+      });
+    });
+
+    /* ── Routing: #new and #run/<id> are the deep links ────────────── */
+
+    var suppressHash = false;
+
+    function setHash(value) {
+      var next = value ? '#' + value : '';
+      if ((location.hash || '') === next) { route(); return; }
+      if (next) location.hash = next;
+      else if (history.replaceState) {
+        history.replaceState(null, '', location.pathname + location.search);
+        route();
+      } else location.hash = '';
+    }
+
+    function route() {
+      if (suppressHash) return;
+      var h = (location.hash || '').replace(/^#/, '');
+      var run = h.match(/^run\/(\d+)$/);
+
+      if (run) {
+        if (state.sheet) state.sheet.dismiss();
+        var id = parseInt(run[1], 10);
+        var already = state.detail && state.detail.run.id === id;
+        loadDetail(id).then(function () {
+          renderDetail();
+          showScreen('detail', already ? 'none' : 'push');
+        }).catch(function (err) {
+          notify(err.message);
+          setHash('');
+        });
+        return;
+      }
+
+      showScreen('home', 'pop');
+      if (h === 'new') {
+        openSheet();
+      } else if (state.sheet) {
+        state.sheet.dismiss();
+      }
+    }
+
+    window.addEventListener('hashchange', route);
+
+    /* ── Boot ──────────────────────────────────────────────────────── */
+
+    renderTabs();
+    loadRuns().then(route);
+
+    if (window.unNative && unNative.attachPullToRefresh) {
+      unNative.attachPullToRefresh(window, function () {
+        return state.screen === 'detail' && state.detail
+          ? loadDetail(state.detail.run.id).then(renderDetail)
+          : loadRuns();
+      }, { content: document.getElementById('app') });
+    }
+  })();
   </script>
 </body>
 </html>

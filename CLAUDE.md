@@ -38,13 +38,31 @@ tables you've marked private), etc.
 
 ---
 
-## About my-cool-app
+## About Run Club
 
-_(add a sentence or two of product context here so Claude Code has a
-shared understanding of what this app is for)_
+Run Club exists to get a group of people out on a run together. The whole
+product is three screens: a list of upcoming runs, a sheet for posting a
+new one, and a run's details with who is going. Anything that is not
+"where, when, who is coming" is out of scope by default; ask before adding
+a surface rather than growing the app sideways.
 
 ## App-specific conventions
 
-_(optional — e.g. "all currency values stored as integer cents, not
-floats"; "the `posts` table is append-only"; "avoid adding new
-dependencies"; etc.)_
+- **`runs` and `run_attendees` are public tables.** A run board is content
+  every member of the app already sees, so staging gets a copy. Do not add
+  a column that would change that (no private notes, no contact details).
+- **The organizer is an attendee.** Creating a run inserts the organizer
+  into `run_attendees` in the same transaction, and the API refuses to let
+  them leave. Anything that counts "who is going" should read that table
+  rather than special-casing the organizer.
+- **Read-only run endpoints are deliberately public.** `GET /api/runs` and
+  `GET /api/runs/:id` bypass the JWT gate via `PUBLIC_GET_API` in
+  `server.js`; every write still requires `req.user`. This is what lets the
+  platform's automated checks, which navigate with no token, exercise the
+  real screens.
+- **Tailwind class names must be whole literals.** The stylesheet is
+  compiled at image-build time by a regex extractor, so glyph tints, avatar
+  colors and tab states are written as complete strings picked from a map,
+  never assembled at runtime.
+- **No em dashes in user-facing copy.** Platform-wide rule; it applies to
+  every label, empty state and toast in `public/index.html`.
