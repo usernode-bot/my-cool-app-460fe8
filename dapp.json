@@ -1,6 +1,8 @@
 {
   "name": "Run Club",
-  "icon": { "emoji": "🏃" },
+  "icon": {
+    "emoji": "🏃"
+  },
   "secrets": [],
   "tests": [
     {
@@ -18,5 +20,9 @@
       "path": "/#run/900001",
       "expectText": "staging-demo-maya"
     }
-  ]
+  ],
+  "visibility": {
+    "build": "private",
+    "view": "public"
+  }
 }
