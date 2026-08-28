@@ -105,11 +105,74 @@ const MAX_NOTE = 200;
 // the picker and this container.
 const FUTURE_SLACK_MS = 60 * 1000;
 
+// Route stats are computed client-side at preview time and display-only, so
+// the server just keeps junk out of the (public) table with range checks.
+const MAX_DISTANCE_M = 300000;
+const MAX_GAIN_M = 10000;
+const MAX_ROUTE_JSON = 20000;
+
+// Route fields are all-or-nothing: a run either carries a full start+finish
+// coordinate pair with a distance, or no map data at all (the Skip route
+// path, and every run posted before routes existed).
+function parseRoute(body) {
+  const raw = [body?.start_lat, body?.start_lng, body?.end_lat, body?.end_lng];
+  if (raw.every((v) => v === undefined || v === null)) return { route: null };
+
+  const [startLat, startLng, endLat, endLng] = raw.map(Number);
+  const latOk = (v) => Number.isFinite(v) && v >= -90 && v <= 90;
+  const lngOk = (v) => Number.isFinite(v) && v >= -180 && v <= 180;
+  if (!latOk(startLat) || !lngOk(startLng) || !latOk(endLat) || !lngOk(endLng)) {
+    return { error: 'That route looks invalid.' };
+  }
+
+  const distanceM = Number(body?.distance_m);
+  if (!Number.isInteger(distanceM) || distanceM < 1 || distanceM > MAX_DISTANCE_M) {
+    return { error: 'That route looks invalid.' };
+  }
+
+  let gainM = body?.elevation_gain_m;
+  if (gainM === undefined || gainM === null) {
+    gainM = null;
+  } else {
+    gainM = Number(gainM);
+    if (!Number.isInteger(gainM) || gainM < 0 || gainM > MAX_GAIN_M) {
+      return { error: 'That route looks invalid.' };
+    }
+  }
+
+  let geojson = null;
+  const geo = body?.route_geojson;
+  if (geo !== undefined && geo !== null) {
+    const coords = geo && geo.type === 'LineString' && Array.isArray(geo.coordinates)
+      ? geo.coordinates
+      : null;
+    const pairOk = (c) => Array.isArray(c) && c.length === 2 &&
+      Number.isFinite(Number(c[0])) && Number(c[0]) >= -180 && Number(c[0]) <= 180 &&
+      Number.isFinite(Number(c[1])) && Number(c[1]) >= -90 && Number(c[1]) <= 90;
+    if (!coords || coords.length < 2 || !coords.every(pairOk)) {
+      return { error: 'That route looks invalid.' };
+    }
+    // Store only the shape the app reads back; drop anything else the
+    // client sent along.
+    geojson = {
+      type: 'LineString',
+      coordinates: coords.map((c) => [Number(c[0]), Number(c[1])]),
+    };
+    if (JSON.stringify(geojson).length > MAX_ROUTE_JSON) {
+      return { error: 'That route is too detailed.' };
+    }
+  }
+
+  return { route: { startLat, startLng, endLat, endLng, distanceM, gainM, geojson } };
+}
+
 // One row per run, with the three derived fields every list/detail view
 // needs: how many are going, whether the caller is one of them, and the
 // first few names for the avatar cluster.
 const RUN_SELECT = `
   SELECT r.id, r.location, r.note, r.starts_at,
+         r.end_location, r.start_lat, r.start_lng, r.end_lat, r.end_lng,
+         r.distance_m, r.elevation_gain_m,
          r.organizer_id, r.organizer_username,
          (SELECT COUNT(*) FROM run_attendees a WHERE a.run_id = r.id)::int
            AS attendee_count,
@@ -152,12 +215,16 @@ app.get('/api/runs', async (req, res) => {
 
 app.post('/api/runs', async (req, res) => {
   const location = String(req.body?.location ?? '').trim();
+  const endLocation = String(req.body?.end_location ?? '').trim();
   const rawNote = String(req.body?.note ?? '').trim();
   const startsAt = new Date(req.body?.starts_at ?? '');
 
   if (!location) return res.status(400).json({ error: 'Add a location.' });
   if (location.length > MAX_LOCATION) {
     return res.status(400).json({ error: 'That location is too long.' });
+  }
+  if (endLocation.length > MAX_LOCATION) {
+    return res.status(400).json({ error: 'That finish name is too long.' });
   }
   if (rawNote.length > MAX_NOTE) {
     return res.status(400).json({ error: 'That note is too long.' });
@@ -169,15 +236,28 @@ app.post('/api/runs', async (req, res) => {
     return res.status(400).json({ error: 'Pick a time in the future.' });
   }
 
+  const parsed = parseRoute(req.body);
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+  const route = parsed.route;
+
   const client = await pool.connect();
   try {
     // The run and its organizer's attendance are one fact, so they land
     // together or not at all.
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [location, rawNote || null, startsAt.toISOString(), req.user.id, req.user.username]
+      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username,
+                         end_location, start_lat, start_lng, end_lat, end_lng,
+                         distance_m, elevation_gain_m, route_geojson)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+      [
+        location, rawNote || null, startsAt.toISOString(), req.user.id, req.user.username,
+        endLocation || null,
+        route ? route.startLat : null, route ? route.startLng : null,
+        route ? route.endLat : null, route ? route.endLng : null,
+        route ? route.distanceM : null, route ? route.gainM : null,
+        route && route.geojson ? JSON.stringify(route.geojson) : null,
+      ]
     );
     const id = rows[0].id;
     await client.query(
@@ -202,6 +282,10 @@ app.get('/api/runs/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(RUN_SELECT + ' WHERE r.id = $2', [callerId(req), id]);
     if (!rows.length) return res.status(404).json({ error: 'Run not found' });
+    // The route geometry is only needed on this screen, so it stays out of
+    // RUN_SELECT (the list would otherwise ship every polyline).
+    const geo = await pool.query(`SELECT route_geojson FROM runs WHERE id = $1`, [id]);
+    rows[0].route_geojson = geo.rows.length ? geo.rows[0].route_geojson : null;
     // Organizer first, then in the order people joined.
     const attendees = await pool.query(
       `SELECT a.user_id, a.username, (a.user_id = r.organizer_id) AS is_organizer
@@ -330,6 +414,20 @@ const SEED_RUNS = [
     minute: 30,
     organizer: [-901, 'staging-demo-maya'],
     joiners: [[-902, 'staging-demo-ethan'], [-903, 'staging-demo-nina']],
+    // Route data so staging shows the detail map and the distance chip.
+    // Coordinates follow the run's name: Riverside Park, NYC.
+    endLocation: 'Staging demo: 79th St Boat Basin',
+    startLat: 40.7803,
+    startLng: -73.9855,
+    endLat: 40.7896,
+    endLng: -73.984,
+    distanceM: 5200,
+    gainM: 48,
+    routeCoords: [
+      [-73.9855, 40.7803], [-73.9862, 40.7816], [-73.9858, 40.7829],
+      [-73.9851, 40.7842], [-73.9849, 40.7856], [-73.9845, 40.7869],
+      [-73.9842, 40.7882], [-73.984, 40.7896],
+    ],
   },
   {
     id: 900002,
@@ -369,9 +467,20 @@ function seedStartsAt(dayOffset, hour, minute) {
 async function seedStaging() {
   for (const run of SEED_RUNS) {
     await pool.query(
-      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (id) DO UPDATE SET starts_at = EXCLUDED.starts_at`,
+      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username,
+                         end_location, start_lat, start_lng, end_lat, end_lng,
+                         distance_m, elevation_gain_m, route_geojson)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       ON CONFLICT (id) DO UPDATE SET
+         starts_at = EXCLUDED.starts_at,
+         end_location = EXCLUDED.end_location,
+         start_lat = EXCLUDED.start_lat,
+         start_lng = EXCLUDED.start_lng,
+         end_lat = EXCLUDED.end_lat,
+         end_lng = EXCLUDED.end_lng,
+         distance_m = EXCLUDED.distance_m,
+         elevation_gain_m = EXCLUDED.elevation_gain_m,
+         route_geojson = EXCLUDED.route_geojson`,
       [
         run.id,
         run.location,
@@ -379,6 +488,16 @@ async function seedStaging() {
         seedStartsAt(run.dayOffset, run.hour, run.minute),
         run.organizer[0],
         run.organizer[1],
+        run.endLocation ?? null,
+        run.startLat ?? null,
+        run.startLng ?? null,
+        run.endLat ?? null,
+        run.endLng ?? null,
+        run.distanceM ?? null,
+        run.gainM ?? null,
+        run.routeCoords
+          ? JSON.stringify({ type: 'LineString', coordinates: run.routeCoords })
+          : null,
       ]
     );
     for (const [userId, username] of [run.organizer, ...run.joiners]) {
@@ -412,6 +531,19 @@ async function migrate() {
       organizer_username VARCHAR(255) NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
+  `);
+  // Route columns arrived after launch; all nullable so runs posted before
+  // routes existed keep working untouched.
+  await pool.query(`
+    ALTER TABLE runs
+      ADD COLUMN IF NOT EXISTS end_location VARCHAR(120),
+      ADD COLUMN IF NOT EXISTS start_lat DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS start_lng DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS end_lat DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS end_lng DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS distance_m INTEGER,
+      ADD COLUMN IF NOT EXISTS elevation_gain_m INTEGER,
+      ADD COLUMN IF NOT EXISTS route_geojson JSONB
   `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS run_attendees (
