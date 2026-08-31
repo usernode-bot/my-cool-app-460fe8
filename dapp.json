@@ -19,6 +19,21 @@
       "name": "Run details shows Who's Going",
       "path": "/#run/900001",
       "expectText": "staging-demo-maya"
+    },
+    {
+      "name": "Time format toggle defaults to am/pm",
+      "path": "/",
+      "expectSelector": "#app[data-time-format='12'] #tf-12[aria-pressed='true']"
+    },
+    {
+      "name": "Home renders 24 hour times",
+      "path": "/?tf=24",
+      "expectSelector": "#app[data-time-format='24'] .run-time"
+    },
+    {
+      "name": "Run details renders 24 hour times",
+      "path": "/?tf=24#run/900001",
+      "expectSelector": "#app[data-time-format='24'] #detail-body .run-time"
     }
   ],
   "visibility": {
