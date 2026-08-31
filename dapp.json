@@ -19,6 +19,11 @@
       "name": "Run details shows Who's Going",
       "path": "/#run/900001",
       "expectText": "staging-demo-maya"
+    },
+    {
+      "name": "Run detail shows the seeded photo",
+      "path": "/#run/900001",
+      "expectSelector": "#detail-photo"
     }
   ],
   "visibility": {
