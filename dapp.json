@@ -24,6 +24,21 @@
       "name": "Run detail shows the seeded photo",
       "path": "/#run/900001",
       "expectSelector": "#detail-photo"
+    },
+    {
+      "name": "Home shows the time format toggle",
+      "path": "/",
+      "expectSelector": "#time-format"
+    },
+    {
+      "name": "Home renders 24 hour times",
+      "path": "/?tf=24",
+      "expectSelector": "#app[data-time-format='24'] .run-time"
+    },
+    {
+      "name": "Run details renders 24 hour times",
+      "path": "/?tf=24#run/900001",
+      "expectSelector": "#app[data-time-format='24'] #detail-body .run-time"
     }
   ],
   "visibility": {
