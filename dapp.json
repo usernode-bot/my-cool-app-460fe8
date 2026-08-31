@@ -34,6 +34,11 @@
       "name": "Run details renders 24 hour times",
       "path": "/?tf=24#run/900001",
       "expectSelector": "#app[data-time-format='24'] #detail-body .run-time"
+    },
+    {
+      "name": "Run detail shows the seeded photo",
+      "path": "/#run/900001",
+      "expectSelector": "#detail-photo"
     }
   ],
   "visibility": {
