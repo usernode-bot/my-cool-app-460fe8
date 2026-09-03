@@ -51,6 +51,20 @@ a surface rather than growing the app sideways.
 - **`runs` and `run_attendees` are public tables.** A run board is content
   every member of the app already sees, so staging gets a copy. Do not add
   a column that would change that (no private notes, no contact details).
+- **`member_goals` is private.** A weekly target is the one thing this app
+  shows only to its owner, so the table is marked `staging:private` and is
+  empty in every preview. Never seed a goal row: the card's whole job is to
+  answer "has this person set a goal?", and seeding the visitor's own goal
+  would fabricate that answer for the checks. The filled preview state comes
+  from `/api/demo/goal`, a read-only route that exists in both environments
+  and returns fabricated numbers only in staging.
+- **Distances are optional and count per attendee.** `runs.distance_km` is
+  nullable and always will be; a run without one is listed normally and
+  contributes nothing to a goal. Weekly progress reads `run_attendees`, so a
+  run counts for everyone on it, organizer included.
+- **`NUMERIC` arrives from `pg` as a string.** `distance_km` and `target_km`
+  are cast with `::float8` in every SELECT, so the frontend never has to
+  parse a number the database already knows.
 - **The organizer is an attendee.** Creating a run inserts the organizer
   into `run_attendees` in the same transaction, and the API refuses to let
   them leave. Anything that counts "who is going" should read that table

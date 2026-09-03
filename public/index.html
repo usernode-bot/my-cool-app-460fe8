@@ -133,6 +133,10 @@
         </button>
       </header>
 
+      <!-- Filled in by renderGoal(); empty until the first response lands,
+           so the tabs never jump down after a flash of placeholder. -->
+      <section id="weekly-goal" class="mt-6"></section>
+
       <div class="mt-6 grid grid-cols-2 gap-1 p-1 bg-[#e5e5ea] rounded-[14px]">
         <button id="tab-upcoming" type="button" data-tab="upcoming"
           class="rounded-[11px] py-2.5 text-[17px] font-medium bg-white text-[#111114] shadow-[0_1px_3px_rgba(0,0,0,0.08)]">Upcoming</button>
@@ -195,6 +199,9 @@
       detail: null,      // { run, attendees }
       screen: 'home',
       sheet: null,
+      sheetKind: null,   // 'new' | 'goal'; only one sheet is up at a time
+      goal: null,        // the whole /api/me/goal payload, or null
+      goalLoaded: false, // distinguishes "no goal" from "not asked yet"
       me: null,          // resolved from the first API response we own
       timeFormat: '12',  // '12' (am/pm) or '24'; resolved at boot below
     };
@@ -326,6 +333,20 @@
         return new Intl.DateTimeFormat(locale, {
           hour: opts.hour, minute: opts.minute, hour12: state.timeFormat !== '24',
         }).format(d);
+      }
+    }
+
+    /* ── Distances ─────────────────────────────────────────────── */
+
+    // Distances are stored to one decimal, so "5" reads as 5 km and "6.5"
+    // keeps its half. Locale-aware because a decimal comma is the norm in
+    // most of the places this app is opened from.
+    function fmtKm(n) {
+      var v = Math.round((Number(n) || 0) * 10) / 10;
+      try {
+        return new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(v);
+      } catch (err) {
+        return String(v);
       }
     }
 
@@ -483,6 +504,13 @@
         ? '<p class="mt-1 text-[17px] text-[#8e8e93] truncate">' + esc(run.note) + '</p>'
         : '';
 
+      // Runs posted before distances existed, and anyone who skipped the
+      // field, simply have no distance line. No "unknown" placeholder.
+      var distance = run.distance_km == null
+        ? ''
+        : '<span class="run-distance shrink-0 px-2 py-0.5 rounded-md bg-[#f1f1f5] text-[15px] font-semibold text-[#6b6b73]">' +
+            esc(fmtKm(run.distance_km)) + ' km</span>';
+
       var action = '';
       if (!past) {
         action = run.joined
@@ -495,7 +523,9 @@
           '<div class="min-w-0 flex-1">' +
             '<h3 class="text-[19px] font-bold leading-tight truncate">' + esc(run.location) + '</h3>' +
             '<div class="mt-1.5 flex items-center gap-2">' + badgeHtml(info) +
-              '<span class="run-time text-[17px] text-[#8e8e93]">' + esc(fmtTime(when)) + '</span></div>' +
+              '<span class="run-time text-[17px] text-[#8e8e93]">' + esc(fmtTime(when)) + '</span>' +
+              distance +
+            '</div>' +
             note +
           '</div>' +
         '</div>' +
@@ -583,8 +613,8 @@
 
       // `wrap` lets a long value run onto a second line instead of being cut
       // off; the short ones stay on a single right-aligned line.
-      function infoRow(iconPath, label, value, blue, wrap) {
-        return '<div class="flex items-center gap-3 px-4 py-4">' +
+      function infoRow(iconPath, label, value, blue, wrap, id) {
+        return '<div' + (id ? ' id="' + id + '"' : '') + ' class="flex items-center gap-3 px-4 py-4">' +
           '<svg class="shrink-0 text-[#0a7aff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="' + iconPath + '"/></svg>' +
           '<span class="shrink-0 text-[19px] font-medium">' + esc(label) + '</span>' +
           '<span class="ml-auto min-w-0 text-[19px] text-right ' + (wrap ? '' : 'truncate ') + (blue ? 'text-[#0a7aff] font-medium' : 'text-[#8e8e93]') + '">' + esc(value) + '</span>' +
@@ -594,10 +624,14 @@
       var PIN = 'M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z';
       var CAL = 'M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4';
       var PEOPLE = 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6 6 0 0112 0M17.5 11.5a3 3 0 100-6M18 20a5.5 5.5 0 00-2-4.3';
+      var RULER = 'M3 8.5A1.5 1.5 0 014.5 7h15A1.5 1.5 0 0121 8.5v7a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 15.5v-7zM7.5 7v3M12 7v4M16.5 7v3';
 
       var facts = '<div class="bg-white rounded-2xl divide-y divide-[#ececf0]">' +
         infoRow(PIN, 'Where', run.location, false, true) +
         infoRow(CAL, 'When', whenText, true) +
+        (run.distance_km == null
+          ? ''
+          : infoRow(RULER, 'Distance', fmtKm(run.distance_km) + ' km', false, false, 'detail-distance')) +
         infoRow(PEOPLE, 'Going', count + (count === 1 ? ' runner' : ' runners'), false) +
       '</div>';
 
@@ -642,6 +676,141 @@
       });
     }
 
+    /* ── Weekly goal card ──────────────────────────────────────────── */
+
+    var goalEl = document.getElementById('weekly-goal');
+
+    // Whole-literal class strings again: a bar tinted with an assembled
+    // "bg-[" + hex + "]" would never make it into the compiled stylesheet.
+    // The widths are the one thing Tailwind cannot express, so they are
+    // inline styles rather than utilities.
+    var GOAL_TONES = {
+      blue: { done: 'bg-[#0a7aff]', planned: 'bg-[#bcd9ff]', value: 'text-[#0a7aff]' },
+      green: { done: 'bg-[#23a455]', planned: 'bg-[#a9e3bf]', value: 'text-[#23a455]' },
+    };
+
+    var GOAL_CARD = 'bg-white rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]';
+    var GOAL_CAP = 'text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93]';
+
+    function daysLeft(week) {
+      if (!week || !week.ends_at) return 0;
+      var ms = new Date(week.ends_at).getTime() - Date.now();
+      if (isNaN(ms)) return 0;
+      // The week always has at least today left in it, even on the last
+      // evening, so never round down to zero.
+      return Math.max(1, Math.ceil(ms / 86400000));
+    }
+
+    function goalHtml() {
+      // Nothing at all until the first answer lands. An empty state that
+      // flashes and is then replaced reads as a bug.
+      if (!state.goalLoaded) return '';
+
+      var payload = state.goal;
+
+      if (!payload || !payload.goal) {
+        // Signed out is its own sentence but the same empty card: there is
+        // no goal to show either way, and offering a button that cannot
+        // save would be worse than explaining why.
+        var hint = token
+          ? 'No goal yet. Pick a weekly distance and watch it fill up here.'
+          : 'Open Run Club in Usernode to set a weekly goal.';
+        var btn = token
+          ? '<button id="set-goal-btn" type="button" class="un-pressable mt-3 w-full h-[46px] rounded-xl bg-[#0a7aff] text-white text-[17px] font-semibold">Set a weekly goal</button>'
+          : '';
+        return '<div id="weekly-goal-empty" class="' + GOAL_CARD + '">' +
+          '<h2 class="' + GOAL_CAP + '">WEEKLY GOAL</h2>' +
+          '<p class="mt-2 text-[17px] leading-snug text-[#8e8e93]">' + hint + '</p>' +
+          btn +
+        '</div>';
+      }
+
+      var target = payload.goal.target_km || 0;
+      var p = payload.progress || {};
+      var done = p.done_km || 0;
+      var planned = p.planned_km || 0;
+      var runs = p.run_count || 0;
+      var undistanced = p.undistanced_count || 0;
+      var met = target > 0 && done >= target;
+      var tone = met ? GOAL_TONES.green : GOAL_TONES.blue;
+
+      // The two segments share one track: what is already run, then what is
+      // on the board for later this week. Neither can push the other off.
+      var donePct = target > 0 ? Math.min(100, (done / target) * 100) : 0;
+      var plannedPct = target > 0
+        ? Math.max(0, Math.min(100 - donePct, (planned / target) * 100))
+        : 0;
+
+      var status = met
+        ? 'Goal met. Nice one.'
+        : (done === 0
+            ? 'Nothing run yet this week.'
+            : fmtKm(target - done) + ' km to go.');
+
+      var days = daysLeft(payload.week);
+      var lines = [
+        runs + (runs === 1 ? ' run' : ' runs') + ' this week. ' +
+          days + (days === 1 ? ' day' : ' days') + ' left.',
+      ];
+      if (planned > 0) lines.push(fmtKm(planned) + ' km more planned.');
+      if (undistanced > 0) {
+        lines.push(undistanced + (undistanced === 1 ? ' run has' : ' runs have') +
+          ' no distance set, so it is not counted.');
+      }
+
+      return '<div class="' + GOAL_CARD + '">' +
+        '<div class="flex items-center justify-between gap-3">' +
+          '<h2 class="' + GOAL_CAP + '">WEEKLY GOAL</h2>' +
+          '<button id="edit-goal-btn" type="button" class="un-touch-target shrink-0 text-[15px] font-semibold text-[#0a7aff]">Edit</button>' +
+        '</div>' +
+        '<p class="mt-1.5 text-[26px] font-extrabold tracking-tight">' +
+          '<span class="' + tone.value + '">' + esc(fmtKm(done)) + '</span>' +
+          '<span class="text-[#8e8e93] font-bold"> of ' + esc(fmtKm(target)) + ' km</span>' +
+        '</p>' +
+        '<div id="weekly-goal-bar" class="mt-3 h-[10px] w-full rounded-full bg-[#ececf0] overflow-hidden flex" ' +
+             'role="img" aria-label="' + esc(fmtKm(done) + ' of ' + fmtKm(target) + ' kilometres run this week') + '">' +
+          '<span class="block h-full ' + tone.done + '" style="width:' + donePct.toFixed(1) + '%"></span>' +
+          '<span class="block h-full ' + tone.planned + '" style="width:' + plannedPct.toFixed(1) + '%"></span>' +
+        '</div>' +
+        '<p class="mt-2.5 text-[17px] font-semibold ' + tone.value + '">' + esc(status) + '</p>' +
+        lines.map(function (line) {
+          return '<p class="mt-0.5 text-[15px] leading-snug text-[#8e8e93]">' + esc(line) + '</p>';
+        }).join('') +
+      '</div>';
+    }
+
+    function renderGoal() {
+      goalEl.innerHTML = goalHtml();
+    }
+
+    function loadGoal() {
+      // ?demo=1 fills the card in a staging preview without seeding a row
+      // that the "has this person set a goal?" read above would then be
+      // answering from. Outside staging the route hands back null and the
+      // real path below runs, so a demo link is never a different app.
+      var injected = params.get('demo') === '1'
+        ? api('/api/demo/goal').then(function (d) { return d && d.demo; }).catch(function () { return null; })
+        : Promise.resolve(null);
+
+      return injected.then(function (demo) {
+        if (demo) return demo;
+        if (!token) return null;
+        // The token carries a locale but no timezone, and the week has to
+        // roll over at the runner's own Monday, so the browser's zone is
+        // the only place that answer can come from.
+        var tz = '';
+        try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (err) {}
+        return api('/api/me/goal' + (tz ? '?tz=' + encodeURIComponent(tz) : ''));
+      }).then(function (payload) {
+        state.goal = payload || null;
+      }).catch(function () {
+        state.goal = null;
+      }).then(function () {
+        state.goalLoaded = true;
+        renderGoal();
+      });
+    }
+
     // Whole-literal class strings, same reason as the tab states above.
     var TF_ON = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white text-[#111114] shadow-[0_1px_2px_rgba(0,0,0,0.08)]';
     var TF_OFF = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] shadow-none';
@@ -661,6 +830,7 @@
     function render() {
       renderTimeFormat();
       renderTabs();
+      renderGoal();
       renderList();
       renderDetail();
     }
@@ -707,6 +877,12 @@
             '<input id="f-when" type="datetime-local" required aria-label="Date and time" class="' + FIELD + ' text-right">' +
           '</div>' +
           '<label class="' + ROW + '">' +
+            '<svg class="shrink-0 text-[#f97316]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A1.5 1.5 0 014.5 7h15A1.5 1.5 0 0121 8.5v7a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 15.5v-7zM7.5 7v3M12 7v4M16.5 7v3"/></svg>' +
+            '<span class="' + LABEL + '">Distance</span>' +
+            '<input id="f-distance" type="number" inputmode="decimal" step="0.1" min="0.1" max="200" placeholder="Optional" class="' + FIELD + ' text-right">' +
+            '<span class="shrink-0 text-[17px] text-[#8e8e93]">km</span>' +
+          '</label>' +
+          '<label class="' + ROW + '">' +
             '<svg class="shrink-0 text-[#8b5cf6]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5zM14 3v5h5"/></svg>' +
             '<span class="' + LABEL + '">Note</span>' +
             '<input id="f-note" type="text" maxlength="200" autocomplete="off" placeholder="Optional: easy 5k pace" class="' + FIELD + '">' +
@@ -736,15 +912,22 @@
       var handle = unNative.presentSheet({
         contentEl: contentEl,
         onDismiss: function () {
-          state.sheet = null;
+          // Dismissal animates, so this can land after a different sheet
+          // has already claimed the slot. Only clear what is still ours.
+          if (state.sheet === handle) {
+            state.sheet = null;
+            state.sheetKind = null;
+          }
           if (location.hash === '#new') setHash('');
         },
       });
       state.sheet = handle;
+      state.sheetKind = 'new';
 
       var where = contentEl.querySelector('#f-where');
       var when = contentEl.querySelector('#f-when');
       var note = contentEl.querySelector('#f-note');
+      var distance = contentEl.querySelector('#f-distance');
       var post = contentEl.querySelector('#post-run-btn');
 
       var photoRow = contentEl.querySelector('#photo-row');
@@ -825,6 +1008,9 @@
             location: where.value.trim(),
             note: note.value.trim(),
             starts_at: startsAt.toISOString(),
+            // Left out entirely when blank, so the column stays null
+            // rather than picking up a 0 nobody meant.
+            distance_km: distance.value.trim() || undefined,
             photo_url: photo ? photo.url : undefined,
             photo_file_id: photo ? photo.id : undefined,
           }),
@@ -832,7 +1018,9 @@
           handle.dismiss();
           state.tab = 'upcoming';
           renderTabs();
-          return loadRuns();
+          // A run with a distance changes this week's progress, and the
+          // organizer is an attendee, so the goal card moves too.
+          return Promise.all([loadRuns(), loadGoal()]);
         }).then(function () {
           notify('Run posted.');
         }).catch(function (err) {
@@ -845,6 +1033,149 @@
       where.focus({ preventScroll: true });
     }
 
+    /* ── Weekly goal sheet ─────────────────────────────────────────── */
+
+    var GOAL_PICKS = [10, 20, 30, 50];
+
+    function buildGoalSheet() {
+      var current = state.goal && state.goal.goal ? state.goal.goal.target_km : null;
+      var wrap = document.createElement('div');
+      wrap.className = 'pb-1';
+
+      var picks = GOAL_PICKS.map(function (km) {
+        return '<button type="button" data-km="' + km + '" ' +
+          'class="goal-pick un-pressable flex-1 h-[46px] rounded-xl bg-[#f1f1f5] text-[17px] font-semibold text-[#111114]">' +
+          esc(fmtKm(km)) + '</button>';
+      }).join('');
+
+      // A deep link is the only way to reach this sheet without a token, so
+      // say why saving is off rather than letting the button fail.
+      var note = token
+        ? '<p class="mt-3 px-1 text-[15px] leading-snug text-[#8e8e93]">Only runs with a distance count toward this. Your week starts on Monday.</p>'
+        : '<p class="mt-3 px-1 text-[15px] leading-snug text-[#8e8e93]">Open Run Club in Usernode to save a goal.</p>';
+
+      var remove = current == null
+        ? ''
+        : '<button id="remove-goal-btn" type="button" class="un-pressable mt-2 w-full h-[50px] rounded-2xl bg-transparent text-[17px] font-semibold text-[#ff3b30]">Remove goal</button>';
+
+      wrap.innerHTML =
+        '<div class="flex items-center justify-between gap-3">' +
+          '<h2 class="text-[30px] font-extrabold tracking-tight">Weekly goal</h2>' +
+          '<button id="goal-sheet-close" type="button" aria-label="Close" class="un-touch-target shrink-0 w-9 h-9 rounded-full bg-[#e9e9ef] text-[#8e8e93] flex items-center justify-center">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
+          '</button>' +
+        '</div>' +
+        '<div class="mt-5 flex items-center gap-3 rounded-2xl border border-[#e4e4ea] px-4 py-4">' +
+          '<svg class="shrink-0 text-[#0a7aff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A1.5 1.5 0 014.5 7h15A1.5 1.5 0 0121 8.5v7a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 15.5v-7zM7.5 7v3M12 7v4M16.5 7v3"/></svg>' +
+          '<span class="shrink-0 w-[64px] text-[17px] text-[#6b6b73]">Target</span>' +
+          '<input id="f-goal" type="number" inputmode="decimal" step="0.1" min="1" max="500" placeholder="20" ' +
+            'value="' + (current == null ? '' : esc(current)) + '" ' +
+            'class="flex-1 min-w-0 bg-transparent outline-none text-[17px] text-[#111114] placeholder:text-[#b6b6bd] text-right">' +
+          '<span class="shrink-0 text-[17px] text-[#8e8e93]">km</span>' +
+        '</div>' +
+        '<div class="mt-3 flex items-center gap-2">' + picks + '</div>' +
+        note +
+        '<button id="save-goal-btn" type="button"' + (token ? '' : ' disabled') +
+          ' class="mt-4 w-full h-[58px] rounded-2xl bg-[#0a7aff] text-white text-[19px] font-semibold disabled:opacity-40">Save goal</button>' +
+        remove;
+
+      return wrap;
+    }
+
+    function openGoalSheet() {
+      if (state.sheet) return;
+      if (!(window.unNative && unNative.presentSheet)) return;
+      var contentEl = buildGoalSheet();
+      var handle = unNative.presentSheet({
+        contentEl: contentEl,
+        onDismiss: function () {
+          // Dismissal animates, so this can land after a different sheet
+          // has already claimed the slot. Only clear what is still ours.
+          if (state.sheet === handle) {
+            state.sheet = null;
+            state.sheetKind = null;
+          }
+          if (location.hash === '#goal') setHash('');
+        },
+      });
+      state.sheet = handle;
+      state.sheetKind = 'goal';
+
+      var field = contentEl.querySelector('#f-goal');
+      var save = contentEl.querySelector('#save-goal-btn');
+      var removeBtn = contentEl.querySelector('#remove-goal-btn');
+
+      contentEl.querySelector('#goal-sheet-close').addEventListener('click', function () {
+        handle.dismiss();
+      });
+
+      contentEl.addEventListener('click', function (e) {
+        var pick = e.target.closest('.goal-pick');
+        if (!pick) return;
+        field.value = pick.dataset.km;
+      });
+
+      save.addEventListener('click', function () {
+        if (save.disabled) return;
+        var value = Number(field.value);
+        if (!isFinite(value) || value < 1 || value > 500) {
+          notify('Pick a goal between 1 and 500 km.');
+          return;
+        }
+        save.disabled = true;
+        save.textContent = 'Saving...';
+        api('/api/me/goal', {
+          method: 'PUT',
+          body: JSON.stringify({ target_km: value }),
+        }).then(function () {
+          handle.dismiss();
+          return loadGoal();
+        }).then(function () {
+          notify('Weekly goal saved.');
+        }).catch(function (err) {
+          save.disabled = false;
+          save.textContent = 'Save goal';
+          notify(err.message);
+        });
+      });
+
+      if (removeBtn) {
+        removeBtn.addEventListener('click', function () {
+          confirmRemoveGoal().then(function (yes) {
+            if (!yes) return;
+            return api('/api/me/goal', { method: 'DELETE' }).then(function () {
+              handle.dismiss();
+              return loadGoal();
+            }).then(function () {
+              notify('Weekly goal removed.');
+            }).catch(function (err) { notify(err.message); });
+          });
+        });
+      }
+
+      field.focus({ preventScroll: true });
+    }
+
+    function confirmRemoveGoal() {
+      if (!(window.unNative && unNative.alert)) return Promise.resolve(true);
+      return unNative.alert({
+        title: 'Remove goal?',
+        message: 'Your runs stay on the board. Only the goal card goes away.',
+        buttons: [
+          { label: 'Cancel', style: 'cancel' },
+          { label: 'Remove', style: 'destructive' },
+        ],
+      }).then(function (r) {
+        return !!(r && r.button && r.button.style === 'destructive');
+      }).catch(function () { return false; });
+    }
+
+    goalEl.addEventListener('click', function (e) {
+      if (e.target.closest('#set-goal-btn') || e.target.closest('#edit-goal-btn')) {
+        setHash('goal');
+      }
+    });
+
     /* ── Actions ───────────────────────────────────────────────────── */
 
     function joinRun(id) {
@@ -856,7 +1187,9 @@
     }
 
     function refreshBoth(id) {
-      var jobs = [loadRuns()];
+      // Joining or leaving changes who is counted against the goal, so it
+      // is refreshed alongside the board rather than going stale.
+      var jobs = [loadRuns(), loadGoal()];
       if (id != null && state.detail && state.detail.run.id === id) {
         jobs.push(loadDetail(id).then(renderDetail));
       }
@@ -1011,8 +1344,18 @@
       }
 
       showScreen('home', 'pop');
-      if (h === 'new') {
-        openSheet();
+      // Dismiss first when the other sheet is up: presentSheet only ever
+      // holds one, so opening without this would be silently swallowed.
+      if (h === 'new' || h === 'goal') {
+        var want = h === 'new' ? 'new' : 'goal';
+        if (state.sheet && state.sheetKind !== want) {
+          var prev = state.sheet;
+          state.sheet = null;
+          state.sheetKind = null;
+          prev.dismiss();
+        }
+        if (want === 'new') openSheet();
+        else openGoalSheet();
       } else if (state.sheet) {
         state.sheet.dismiss();
       }
@@ -1041,13 +1384,14 @@
 
     renderTimeFormat();
     renderTabs();
+    loadGoal();
     loadRuns().then(route);
 
     if (window.unNative && unNative.attachPullToRefresh) {
       unNative.attachPullToRefresh(window, function () {
         return state.screen === 'detail' && state.detail
           ? loadDetail(state.detail.run.id).then(renderDetail)
-          : loadRuns();
+          : Promise.all([loadRuns(), loadGoal()]);
       }, { content: document.getElementById('app') });
     }
   })();
