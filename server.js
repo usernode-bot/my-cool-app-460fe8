@@ -24,7 +24,7 @@ const APP_AUDIENCE = process.env.USERNODE_APP_ID
 // Paths that stay open without authentication. Add a path here (and add it
 // with `app.get`/`app.post` below) if you deliberately want it public.
 // Everything else requires a valid platform-issued JWT.
-const PUBLIC_API_PATHS = new Set(['/health']);
+const PUBLIC_API_PATHS = new Set(['/health', '/api/demo/goal']);
 
 // The run board itself is shared content: every member of this app sees the
 // same list of runs, so reading it does not need a token. Keeping the two
@@ -107,6 +107,15 @@ const MAX_PHOTO_FILE_ID = 64;
 // the picker and this container.
 const FUTURE_SLACK_MS = 60 * 1000;
 
+// A run's distance is optional, but when given it has to be a plausible
+// one: the upper bound is generous enough for an ultra, the lower one
+// keeps a mistyped "0" out of the weekly totals.
+const MIN_DISTANCE_KM = 0.1;
+const MAX_DISTANCE_KM = 200;
+// A weekly goal is a target across a whole week, so it runs higher.
+const MIN_GOAL_KM = 1;
+const MAX_GOAL_KM = 500;
+
 // One row per run, with the three derived fields every list/detail view
 // needs: how many are going, whether the caller is one of them, and the
 // first few names for the avatar cluster.
@@ -114,6 +123,10 @@ const RUN_SELECT = `
   SELECT r.id, r.location, r.note, r.starts_at,
          r.organizer_id, r.organizer_username,
          r.photo_url, r.photo_file_id,
+         -- NUMERIC arrives from pg as a STRING. Casting here means every
+         -- read path hands the frontend a real number it can do arithmetic
+         -- with, rather than something that concatenates.
+         r.distance_km::float8 AS distance_km,
          (SELECT COUNT(*) FROM run_attendees a WHERE a.run_id = r.id)::int
            AS attendee_count,
          EXISTS (
@@ -134,6 +147,26 @@ const RUN_SELECT = `
          ), ARRAY[]::varchar[]) AS preview
   FROM runs r
 `;
+
+// Shared by the run distance and the weekly goal, which differ only in
+// their bounds. Returns { value } (null meaning "not given") or { error }.
+// Empty string, null and undefined all mean "not given"; anything else has
+// to parse as a finite number inside the range.
+function parseDistance(raw, min, max, message) {
+  if (raw === undefined || raw === null || String(raw).trim() === '') {
+    return { value: null };
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return { error: message };
+  // One decimal place is the resolution the pickers offer; rounding here
+  // keeps NUMERIC(5,2) from storing a value the UI can never reproduce.
+  const rounded = Math.round(n * 10) / 10;
+  if (rounded < min || rounded > max) return { error: message };
+  return { value: rounded };
+}
+
+const DISTANCE_ERROR = 'Enter a distance between 0.1 and 200 km.';
+const GOAL_ERROR = 'Pick a goal between 1 and 500 km.';
 
 // List runs. `upcoming` is the default tab: anything that has not started
 // yet, soonest first. `past` reads the other way and is capped.
@@ -176,6 +209,12 @@ app.post('/api/runs', async (req, res) => {
   if (photoUrl.length > MAX_PHOTO_URL || photoFileId.length > MAX_PHOTO_FILE_ID) {
     return res.status(400).json({ error: 'That photo reference is too long.' });
   }
+  // Optional: a run posted without a distance is still a run, it just
+  // cannot count toward anybody's weekly goal.
+  const distance = parseDistance(
+    req.body?.distance_km, MIN_DISTANCE_KM, MAX_DISTANCE_KM, DISTANCE_ERROR
+  );
+  if (distance.error) return res.status(400).json({ error: distance.error });
   if (isNaN(startsAt.getTime())) {
     return res.status(400).json({ error: 'Pick a date and time.' });
   }
@@ -189,8 +228,8 @@ app.post('/api/runs', async (req, res) => {
     // together or not at all.
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id, distance_km)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
       [
         location,
         rawNote || null,
@@ -199,6 +238,7 @@ app.post('/api/runs', async (req, res) => {
         req.user.username,
         photoUrl || null,
         photoFileId || null,
+        distance.value,
       ]
     );
     const id = rows[0].id;
@@ -304,6 +344,158 @@ app.delete('/api/runs/:id', async (req, res) => {
   }
 });
 
+/* ── Weekly goals ─────────────────────────────────────────────────────
+ * A member's weekly distance target lives in member_goals, one row per
+ * person. Progress is never stored: it is summed on read over the runs
+ * they have joined whose start falls inside the current week, so the
+ * week "resets" simply by the window moving on Monday morning. Nothing
+ * to backfill, no cron, no counters to drift.
+ * ──────────────────────────────────────────────────────────────────── */
+
+// Postgres knows the IANA zone database; the client tells us which entry
+// of it to use. Loaded once at boot so a per-request lookup is a Set hit.
+// Null means the catalogue could not be read, in which case the syntax
+// guard below is the only filter — safe either way, since the zone is
+// always passed as a bind parameter and never interpolated into SQL.
+let TIMEZONE_NAMES = null;
+
+async function loadTimezoneNames() {
+  try {
+    const { rows } = await pool.query(`SELECT name FROM pg_timezone_names`);
+    TIMEZONE_NAMES = new Set(rows.map((r) => r.name));
+  } catch (err) {
+    console.warn('[goals] could not read pg_timezone_names:', err.message);
+    TIMEZONE_NAMES = null;
+  }
+}
+
+// Same stance as the frontend's safeLocale(): an unrecognised value must
+// degrade to a working default, never take the whole screen down. An
+// unknown zone would make Postgres raise mid-query.
+function safeTimeZone(tz) {
+  if (!tz || typeof tz !== 'string') return 'UTC';
+  if (tz.length > 64 || !/^[A-Za-z0-9_+\-\/]+$/.test(tz)) return 'UTC';
+  if (TIMEZONE_NAMES && !TIMEZONE_NAMES.has(tz)) return 'UTC';
+  return tz;
+}
+
+// date_trunc('week', ...) is Monday-based in Postgres, which is the week
+// this app wants. Comparing the truncated local timestamps puts a run in
+// "this week" according to the viewer's own calendar, not UTC's.
+const WEEK_PROGRESS_SQL = `
+  SELECT
+    COALESCE(SUM(r.distance_km) FILTER (WHERE r.starts_at <  NOW()), 0)::float8
+      AS done_km,
+    COALESCE(SUM(r.distance_km) FILTER (WHERE r.starts_at >= NOW()), 0)::float8
+      AS planned_km,
+    COUNT(*) FILTER (WHERE r.distance_km IS NOT NULL)::int AS run_count,
+    COUNT(*) FILTER (WHERE r.distance_km IS NULL)::int     AS undistanced_count,
+    ((date_trunc('week', NOW() AT TIME ZONE $2) + INTERVAL '7 days')
+      AT TIME ZONE $2) AS week_ends_at
+  FROM run_attendees a
+  JOIN runs r ON r.id = a.run_id
+  WHERE a.user_id = $1
+    AND date_trunc('week', r.starts_at AT TIME ZONE $2)
+      = date_trunc('week', NOW()        AT TIME ZONE $2)
+`;
+
+// Staging has no member_goals rows (the table is staging:private, and
+// seeding the visitor's own goal would fabricate the very "does this
+// person have a goal?" signal this endpoint exists to answer). So the
+// filled card is served here instead: read-only, persisted nowhere, and
+// a strict no-op outside staging.
+function demoGoalPayload() {
+  const ends = new Date();
+  // Next Monday 00:00 local to the container, matching the real query's
+  // week end closely enough for the preview's "days left" line.
+  ends.setHours(0, 0, 0, 0);
+  ends.setDate(ends.getDate() + ((8 - (ends.getDay() || 7)) % 7 || 7));
+  return {
+    username: 'staging-demo-maya',
+    goal: { target_km: 25 },
+    progress: {
+      done_km: 16.5,
+      planned_km: 5,
+      run_count: 2,
+      undistanced_count: 1,
+    },
+    week: { ends_at: ends.toISOString() },
+  };
+}
+
+// The preview's filled goal card. Deliberately a SEPARATE route from
+// /api/me/goal, which stays behind req.user: this one answers with
+// fabricated numbers and no identity at all, which is what lets the
+// platform's checks reach the filled state (they navigate with no
+// token, same reason the run board's reads are public). It is served in
+// production too and answers `{ demo: null }` there, so which routes
+// exist never differs between environments -- only the data does.
+app.get('/api/demo/goal', (req, res) => {
+  res.json({ demo: IS_STAGING ? demoGoalPayload() : null });
+});
+
+// Deliberately NOT in PUBLIC_GET_API: unlike the run board, a goal is
+// only ever the caller's own.
+app.get('/api/me/goal', async (req, res) => {
+  const tz = safeTimeZone(req.query.tz);
+  try {
+    const [goal, progress] = await Promise.all([
+      pool.query(
+        `SELECT target_km::float8 AS target_km FROM member_goals WHERE user_id = $1`,
+        [req.user.id]
+      ),
+      pool.query(WEEK_PROGRESS_SQL, [req.user.id, tz]),
+    ]);
+    const p = progress.rows[0];
+    res.json({
+      id: req.user.id,
+      username: req.user.username,
+      goal: goal.rows.length ? { target_km: goal.rows[0].target_km } : null,
+      progress: {
+        done_km: p.done_km,
+        planned_km: p.planned_km,
+        run_count: p.run_count,
+        undistanced_count: p.undistanced_count,
+      },
+      week: { ends_at: p.week_ends_at },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/me/goal', async (req, res) => {
+  const target = parseDistance(
+    req.body?.target_km, MIN_GOAL_KM, MAX_GOAL_KM, GOAL_ERROR
+  );
+  if (target.error) return res.status(400).json({ error: target.error });
+  if (target.value === null) return res.status(400).json({ error: GOAL_ERROR });
+  try {
+    await pool.query(
+      `INSERT INTO member_goals (user_id, username, target_km)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id) DO UPDATE
+         SET target_km = EXCLUDED.target_km,
+             username  = EXCLUDED.username,
+             updated_at = NOW()`,
+      [req.user.id, req.user.username, target.value]
+    );
+    res.json({ goal: { target_km: target.value } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Idempotent: removing a goal nobody set is still a success.
+app.delete('/api/me/goal', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM member_goals WHERE user_id = $1`, [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // HTML shell: serve the app if authenticated. Unauthenticated top-level
@@ -360,6 +552,7 @@ const SEED_RUNS = [
     organizer: [-901, 'staging-demo-maya'],
     joiners: [[-902, 'staging-demo-ethan'], [-903, 'staging-demo-nina']],
     photoUrl: SEED_PHOTO_URL,
+    distanceKm: 5,
   },
   {
     id: 900002,
@@ -370,6 +563,7 @@ const SEED_RUNS = [
     minute: 0,
     organizer: [-902, 'staging-demo-ethan'],
     joiners: [[-901, 'staging-demo-maya']],
+    distanceKm: 8,
   },
   {
     id: 900003,
@@ -380,15 +574,38 @@ const SEED_RUNS = [
     minute: 0,
     organizer: [-903, 'staging-demo-nina'],
     joiners: [[-901, 'staging-demo-maya'], [-902, 'staging-demo-ethan']],
+    distanceKm: 12,
+  },
+  {
+    // Deliberately inside the CURRENT week and already over, so the Past
+    // tab in a preview always carries a distance from this week rather
+    // than only from whenever dayOffset -3 happens to land.
+    id: 900004,
+    location: 'Staging demo: Canal towpath intervals',
+    note: '6x800m, jog back',
+    dayOffset: 0,
+    hour: 6,
+    minute: 0,
+    past: true,
+    organizer: [-903, 'staging-demo-nina'],
+    joiners: [[-901, 'staging-demo-maya'], [-902, 'staging-demo-ethan']],
+    distanceKm: 6.5,
   },
 ];
 
 // Times are recomputed on every boot so the demo rows keep saying Today /
 // Tomorrow however long the preview container has been up.
-function seedStartsAt(dayOffset, hour, minute) {
+function seedStartsAt(dayOffset, hour, minute, past) {
   const d = new Date();
   d.setHours(hour, minute, 0, 0);
   d.setDate(d.getDate() + dayOffset);
+  // A row seeded as deliberately-past wants the opposite correction: a
+  // container booted before 06:00 would otherwise put "earlier today"
+  // into the future, where an already-happened demo run cannot go.
+  if (past) {
+    if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1);
+    return d.toISOString();
+  }
   // A container booted after 18:30 would otherwise seed today's demo run
   // straight into the Past tab, leaving Upcoming thinner than the testing
   // steps describe.
@@ -399,17 +616,19 @@ function seedStartsAt(dayOffset, hour, minute) {
 async function seedStaging() {
   for (const run of SEED_RUNS) {
     await pool.query(
-      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (id) DO UPDATE SET starts_at = EXCLUDED.starts_at`,
+      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url, distance_km)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (id) DO UPDATE SET starts_at = EXCLUDED.starts_at,
+                                      distance_km = EXCLUDED.distance_km`,
       [
         run.id,
         run.location,
         run.note,
-        seedStartsAt(run.dayOffset, run.hour, run.minute),
+        seedStartsAt(run.dayOffset, run.hour, run.minute, run.past),
         run.organizer[0],
         run.organizer[1],
         run.photoUrl || null,
+        run.distanceKm ?? null,
       ]
     );
     for (const [userId, username] of [run.organizer, ...run.joiners]) {
@@ -452,6 +671,14 @@ async function migrate() {
       ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500),
       ADD COLUMN IF NOT EXISTS photo_file_id VARCHAR(64)
   `);
+  // How far the run is, in kilometres. Nullable twice over: every row
+  // written before this column existed has none, and a poster is never
+  // made to supply one. A run without a distance simply cannot count
+  // toward a weekly goal.
+  await pool.query(`
+    ALTER TABLE runs
+      ADD COLUMN IF NOT EXISTS distance_km NUMERIC(5,2)
+  `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS run_attendees (
       run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
@@ -461,8 +688,32 @@ async function migrate() {
       PRIMARY KEY (run_id, user_id)
     )
   `);
+  // One row per member. No foreign keys: user ids are bare integers
+  // everywhere in this schema, because the platform owns identity and
+  // this app has no users table to point at.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS member_goals (
+      user_id INTEGER PRIMARY KEY,
+      username VARCHAR(255) NOT NULL,
+      target_km NUMERIC(5,2) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  // Private, unlike runs and run_attendees. A goal is the one thing this
+  // app shows only to the person it belongs to, and the platform's test
+  // for a private table is exactly that. Staging gets the schema and no
+  // rows, which is what we want: a seeded goal for the preview visitor
+  // would fabricate the "does this person have a goal?" answer that the
+  // home card is built to read.
+  await pool.query(`COMMENT ON TABLE member_goals IS 'staging:private'`);
   await pool.query(
     `CREATE INDEX IF NOT EXISTS runs_starts_at_idx ON runs (starts_at)`
+  );
+  // The primary key is (run_id, user_id), so the weekly progress query's
+  // lookup by user alone had nothing to use before this.
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS run_attendees_user_idx ON run_attendees (user_id)`
   );
 }
 
@@ -470,6 +721,7 @@ let server;
 
 async function start() {
   await migrate();
+  await loadTimezoneNames();
 
   // Staging starts from a copy of production, where these tables are brand
   // new and therefore empty, so a preview would show nothing but the empty

@@ -39,6 +39,31 @@
       "name": "Run detail shows the seeded photo",
       "path": "/#run/900001",
       "expectSelector": "#detail-photo"
+    },
+    {
+      "name": "Home shows the weekly goal empty state",
+      "path": "/",
+      "expectSelector": "#weekly-goal-empty"
+    },
+    {
+      "name": "Weekly goal preview shows progress",
+      "path": "/?demo=1",
+      "expectSelector": "#weekly-goal-bar"
+    },
+    {
+      "name": "Weekly goal sheet opens",
+      "path": "/#goal",
+      "expectSelector": "#save-goal-btn"
+    },
+    {
+      "name": "Run card shows distance",
+      "path": "/",
+      "expectSelector": ".run-distance"
+    },
+    {
+      "name": "Run detail shows distance",
+      "path": "/#run/900001",
+      "expectSelector": "#detail-distance"
     }
   ],
   "visibility": {
