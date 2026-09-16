@@ -3,6 +3,11 @@ const path = require('path');
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
 
+// The platform's address, injected by the platform at deploy (#2047). Never
+// written out here: a hardcoded hostname is what broke this app when the
+// platform moved domains. Empty only outside the platform (local runs).
+const PLATFORM_ORIGIN = (process.env.USERNODE_PLATFORM_ORIGIN || '').replace(/\/+$/, '');
+
 const app = express();
 const port = process.env.PORT || 3000;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -326,14 +331,14 @@ app.get('*', (req, res) => {
     const deepPath = /^\/[A-Za-z0-9\-._~!$&()*+,;=:@\/%?]*$/.test(req.originalUrl)
       ? '?path=' + req.originalUrl : '';
     if (req.get('sec-fetch-dest') === 'document') {
-      return res.redirect(302, 'https://social-vibecoding.usernodelabs.org/#app/my-cool-app-460fe8/full' + deepPath);
+      return res.redirect(302, (PLATFORM_ORIGIN + '/#app/my-cool-app-460fe8/full') + deepPath);
     }
     return res.status(401).send(`<!doctype html><meta charset=utf-8><title>Open in Usernode</title>
 <body style="font-family:system-ui;background:#ffffff;color:#18181b;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0">
   <div style="max-width:24rem;padding:2rem;text-align:center">
     <h1 style="font-size:1.25rem;margin:0 0 0.5rem">Open this app inside Usernode</h1>
     <p style="color:#52525b;font-size:0.9rem;margin:0 0 1.25rem">This page is served via the platform; direct visits aren't authenticated.</p>
-    <a href="https://social-vibecoding.usernodelabs.org/#app/my-cool-app-460fe8/full${deepPath}" style="display:inline-block;padding:0.5rem 1rem;background:#0a7aff;color:white;border-radius:0.5rem;text-decoration:none;font-size:0.9rem">Open in Usernode</a>
+    <a href="${PLATFORM_ORIGIN}/#app/my-cool-app-460fe8/full${deepPath}" style="display:inline-block;padding:0.5rem 1rem;background:#0a7aff;color:white;border-radius:0.5rem;text-decoration:none;font-size:0.9rem">Open in Usernode</a>
   </div>
 </body>`);
   }
