@@ -66,6 +66,120 @@
   <title>Run Club</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%230a7aff'/><text x='50' y='68' font-size='52' text-anchor='middle'>%F0%9F%8F%83</text></svg>">
 
+  <!-- Mode tampilan (theme). This runs BEFORE the stylesheet and before any
+       markup, because the `dark` class it writes onto <html> is what the
+       compiled `dark:` utilities key off: resolving the mode after the first
+       paint is exactly what makes a dark boot flash light first.
+       It owns the whole preference (read, write, OS query, notify) and
+       exposes it as window.RunClubTheme so the app script below only has to
+       draw the icon and the menu. -->
+  <script>
+  (function () {
+    'use strict';
+
+    var KEY = 'runclub.theme';
+    var MODES = { dark: 1, light: 1, system: 1 };
+    var params = new URLSearchParams(window.location.search);
+
+    // The token carries the signed-in username, so the choice can be
+    // namespaced per person on a shared device. This reads the claim
+    // without verifying it, which is fine for picking a storage key and
+    // nothing else. An offline load arrives with no token at all, hence
+    // the shared key as well.
+    var keys = (function () {
+      var token = params.get('token') || '';
+      var who = '';
+      try {
+        var part = String(token).split('.')[1];
+        if (part) {
+          var b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+          while (b64.length % 4) b64 += '=';
+          var claims = JSON.parse(atob(b64));
+          if (claims && claims.username) who = String(claims.username);
+        }
+      } catch (err) { /* not a readable token: use the shared key */ }
+      return who ? [KEY + ':' + who, KEY] : [KEY];
+    })();
+
+    // A cross-origin frame can be refused storage outright, so every access
+    // is guarded: the worst case is a choice that does not survive a
+    // reload, never a screen that fails to render.
+    function read() {
+      for (var i = 0; i < keys.length; i++) {
+        try {
+          var v = window.localStorage.getItem(keys[i]);
+          if (MODES[v]) return v;
+        } catch (err) { return ''; }
+      }
+      return '';
+    }
+
+    // Written to the shared key too: an offline boot has no token, so the
+    // per-user key is unreachable there and would otherwise read as
+    // "never chose anything".
+    function write(value) {
+      try {
+        window.localStorage.setItem(KEY, value);
+        if (keys.length > 1) window.localStorage.setItem(keys[0], value);
+      } catch (err) { /* storage refused: this load still honours the choice */ }
+    }
+
+    // Precedence: an explicit ?theme= deep link, then the remembered
+    // choice, then System. The link is pure view state with no database
+    // write, so it is deliberately not staging-gated, and deliberately not
+    // persisted either: a link shared for a screenshot must not quietly
+    // re-set the reader's own choice.
+    var linked = params.get('theme');
+    var mode = MODES[linked] ? linked : (read() || 'system');
+
+    var mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+    var listeners = [];
+
+    function resolve() {
+      if (mode === 'dark' || mode === 'light') return mode;
+      return (mq && mq.matches) ? 'dark' : 'light';
+    }
+
+    function apply() {
+      var theme = resolve();
+      var root = document.documentElement;
+      root.classList.toggle('dark', theme === 'dark');
+      // Native controls (the datetime-local picker, scrollbars, form
+      // widgets) follow this rather than any class.
+      root.style.colorScheme = theme;
+      root.setAttribute('data-theme-mode', mode);
+      root.setAttribute('data-theme', theme);
+      for (var i = 0; i < listeners.length; i++) {
+        try { listeners[i](mode, theme); } catch (err) { /* one bad listener must not stop the rest */ }
+      }
+    }
+
+    if (mq) {
+      var onSystemChange = function () { if (mode === 'system') apply(); };
+      // addListener is the deprecated spelling, still the only one on
+      // older Safari.
+      if (mq.addEventListener) mq.addEventListener('change', onSystemChange);
+      else if (mq.addListener) mq.addListener(onSystemChange);
+    }
+
+    window.RunClubTheme = {
+      MODES: ['dark', 'light', 'system'],
+      mode: function () { return mode; },
+      theme: function () { return resolve(); },
+      set: function (next) {
+        if (!MODES[next] || next === mode) return;
+        mode = next;
+        write(next);
+        apply();
+      },
+      // Called on every change, including an OS switch while on System.
+      subscribe: function (fn) { listeners.push(fn); },
+    };
+
+    apply();
+  })();
+  </script>
+
   <!-- Tailwind, PRECOMPILED for this app. The config lives in
        tailwind.config.js at the repo root; the Dockerfile's builder stage
        compiles it to public/tailwind.css on every image build, so the
@@ -137,6 +251,23 @@
       --un-muted: #8e8e93;
       --un-radius-card: 16px;
     }
+    /* Same tokens for the dark skin. The kit ships its own `.dark` values,
+       but ours are set on :root and would otherwise win in both modes, so
+       every token overridden above needs a dark counterpart here. Sheets,
+       modals, action sheets, popovers and toasts all read these. */
+    .dark {
+      --un-group-bg: #1c1c20;
+      --un-sheet-bg: #1c1c20;
+      /* A popover has no backdrop behind it, so this one stays fully
+         opaque or the page reads through the menu. */
+      --un-popover-bg: #26262b;
+      --un-navbar-bg: rgba(18, 18, 22, 0.8);
+      --un-hairline: #2c2c31;
+      --un-muted: #98989f;
+      --un-switch-track-off: #39393d;
+      --un-action-neutral: #3a3a42;
+      --un-backdrop: rgba(0, 0, 0, 0.55);
+    }
     /* Headings get the rounder, bolder display face everywhere they occur,
        including ones injected by JS template strings, so every screen's
        titles feel more "berkesan" without a font class in each template. */
@@ -156,9 +287,12 @@
     input[type="date"]::-webkit-calendar-picker-indicator,
     input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.35; }
     input[type="date"]:invalid, input[type="time"]:invalid { color: #b6b6bd; }
+    .dark input[type="date"]:invalid, .dark input[type="time"]:invalid { color: #6f6f78; }
+    .dark input[type="date"]::-webkit-calendar-picker-indicator,
+    .dark input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.55; }
   </style>
 </head>
-<body class="bg-[#f2f2f7] text-[#111114] antialiased">
+<body class="bg-[#f2f2f7] dark:bg-[#0b0b0f] text-[#111114] dark:text-[#f2f2f7] antialiased">
   <!-- Safe-area top inset: bare env() is 0px inside the platform frame, so
        the bridge-forwarded custom property comes first with env() as the
        standalone fallback. -->
@@ -170,29 +304,35 @@
     <section id="screen-home" class="px-5 pb-24">
       <header class="flex items-start justify-between gap-4">
         <h1 class="text-[40px] font-extrabold tracking-tight leading-none pt-1">Run Club</h1>
-        <button id="new-run-btn" type="button" aria-label="Post a new run"
-          class="un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-            <path d="M12 5v14M5 12h14"/>
-          </svg>
-        </button>
+        <div class="shrink-0 flex items-center gap-2 pt-0.5">
+          <!-- The glyph itself is drawn by renderTheme() so it always shows
+               the mode that is actually in force. -->
+          <button id="theme-btn" type="button" class="theme-btn un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center"
+            aria-label="Mode tampilan" title="Mode tampilan"></button>
+          <button id="new-run-btn" type="button" aria-label="Post a new run"
+            class="un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+          </button>
+        </div>
       </header>
 
-      <div class="mt-6 grid grid-cols-2 gap-1 p-1 bg-[#e5e5ea] rounded-[14px]">
+      <div class="mt-6 grid grid-cols-2 gap-1 p-1 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[14px]">
         <button id="tab-upcoming" type="button" data-tab="upcoming"
-          class="rounded-[11px] py-2.5 text-[17px] font-medium bg-white text-[#111114] shadow-[0_1px_3px_rgba(0,0,0,0.08)]">Upcoming</button>
+          class="rounded-[11px] py-2.5 text-[17px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]">Upcoming</button>
         <button id="tab-past" type="button" data-tab="past"
-          class="rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#8e8e93] shadow-none">Past</button>
+          class="rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">Past</button>
       </div>
 
       <div class="mt-6 mb-3 px-1 flex items-center justify-between gap-3">
-        <h2 id="list-heading" class="text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93]">UPCOMING RUNS</h2>
+        <h2 id="list-heading" class="text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93] dark:text-[#98989f]">UPCOMING RUNS</h2>
         <div id="time-format" role="group" aria-label="Time format"
-          class="shrink-0 flex items-center gap-0.5 p-0.5 bg-[#e5e5ea] rounded-[10px]">
+          class="shrink-0 flex items-center gap-0.5 p-0.5 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[10px]">
           <button id="tf-12" type="button" data-format="12" aria-pressed="true"
-            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white text-[#111114] shadow-[0_1px_2px_rgba(0,0,0,0.08)]">AM/PM</button>
+            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]">AM/PM</button>
           <button id="tf-24" type="button" data-format="24" aria-pressed="false"
-            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] shadow-none">24h</button>
+            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">24h</button>
         </div>
       </div>
       <div id="run-list" class="space-y-3"></div>
@@ -202,17 +342,21 @@
     <section id="screen-detail" class="px-5 pb-24 hidden">
       <header class="flex items-center justify-between">
         <button id="back-btn" type="button" aria-label="Back"
-          class="un-touch-target w-[52px] h-[52px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
+          class="un-touch-target w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <path d="M15 5l-7 7 7 7"/>
           </svg>
         </button>
+        <div class="shrink-0 flex items-center gap-2">
+        <button id="theme-btn-detail" type="button" class="theme-btn un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center"
+          aria-label="Mode tampilan" title="Mode tampilan"></button>
         <button id="more-btn" type="button" aria-label="More options"
-          class="un-touch-target w-[52px] h-[52px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
+          class="un-touch-target w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
             <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
           </svg>
         </button>
+        </div>
       </header>
       <h1 class="mt-4 text-[40px] font-extrabold tracking-tight leading-none">Run details</h1>
       <div id="detail-body" class="mt-6 space-y-6"></div>
@@ -453,12 +597,12 @@
 
     function badgeHtml(info) {
       if (info.tone === 'today') {
-        return '<span class="px-2 py-0.5 rounded-md bg-[#d7f5de] text-[#1b8a3d] text-[16px] font-semibold">' + esc(info.label) + '</span>';
+        return '<span class="px-2 py-0.5 rounded-md bg-[#d7f5de] dark:bg-[#123a1f] text-[#1b8a3d] dark:text-[#5fdd8a] text-[16px] font-semibold">' + esc(info.label) + '</span>';
       }
       if (info.tone === 'tomorrow') {
-        return '<span class="px-2 py-0.5 rounded-md bg-[#dbeafe] text-[#0a7aff] text-[16px] font-semibold">' + esc(info.label) + '</span>';
+        return '<span class="px-2 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#12243d] text-[#0a7aff] dark:text-[#5aa9ff] text-[16px] font-semibold">' + esc(info.label) + '</span>';
       }
-      return '<span class="text-[16px] font-semibold text-[#111114]">' + esc(info.label) + '</span>';
+      return '<span class="text-[16px] font-semibold text-[#111114] dark:text-[#f2f2f7]">' + esc(info.label) + '</span>';
     }
 
     /* ── Location glyphs and avatars ───────────────────────────────── */
@@ -466,11 +610,11 @@
     // Whole-literal class strings: Tailwind's extractor is a regex over
     // this file, so an assembled "bg-[" + hex + "]" would never compile.
     var GLYPHS = [
-      { bg: 'bg-[#dcf5e3]', fg: 'text-[#23a455]', d: 'M12 3l4 6h-2.5l3 5H14l3 5H7l3-5H7.5l3-5H8l4-6zM12 19v2' },
-      { bg: 'bg-[#dbeafe]', fg: 'text-[#2b7fff]', d: 'M3 8c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 13c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 18c2-2 4-2 6 0s4 2 6 0 4-2 6 0' },
-      { bg: 'bg-[#ede4ff]', fg: 'text-[#8b5cf6]', d: 'M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z' },
-      { bg: 'bg-[#ffe8d5]', fg: 'text-[#f97316]', d: 'M12 5c5 0 9 3.1 9 7s-4 7-9 7-9-3.1-9-7 4-7 9-7zm0 4c2.2 0 4 1.3 4 3s-1.8 3-4 3-4-1.3-4-3 1.8-3 4-3z' },
-      { bg: 'bg-[#ffe1ee]', fg: 'text-[#ec4899]', d: 'M3 19l6-10 4 6 2.5-4L21 19H3z' },
+      { bg: 'bg-[#dcf5e3] dark:bg-[#12331f]', fg: 'text-[#23a455] dark:text-[#4ed07f]', d: 'M12 3l4 6h-2.5l3 5H14l3 5H7l3-5H7.5l3-5H8l4-6zM12 19v2' },
+      { bg: 'bg-[#dbeafe] dark:bg-[#12243d]', fg: 'text-[#2b7fff] dark:text-[#6fb4ff]', d: 'M3 8c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 13c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 18c2-2 4-2 6 0s4 2 6 0 4-2 6 0' },
+      { bg: 'bg-[#ede4ff] dark:bg-[#241a3d]', fg: 'text-[#8b5cf6] dark:text-[#b494ff]', d: 'M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z' },
+      { bg: 'bg-[#ffe8d5] dark:bg-[#3a2513]', fg: 'text-[#f97316] dark:text-[#ffa257]', d: 'M12 5c5 0 9 3.1 9 7s-4 7-9 7-9-3.1-9-7 4-7 9-7zm0 4c2.2 0 4 1.3 4 3s-1.8 3-4 3-4-1.3-4-3 1.8-3 4-3z' },
+      { bg: 'bg-[#ffe1ee] dark:bg-[#3a1526]', fg: 'text-[#ec4899] dark:text-[#ff7fb8]', d: 'M3 19l6-10 4 6 2.5-4L21 19H3z' },
     ];
 
     function glyphHtml(location, size) {
@@ -508,7 +652,7 @@
       var initial = String(username || '?').trim().charAt(0).toUpperCase() || '?';
       return '<span title="' + esc(username) + '" class="' + dims + ' ' + tone +
         ' shrink-0 rounded-full text-white font-semibold flex items-center justify-center' +
-        (ring ? ' ring-2 ring-white' : '') + '">' + esc(initial) + '</span>';
+        (ring ? ' ring-2 ring-white dark:ring-[#1c1c20]' : '') + '">' + esc(initial) + '</span>';
     }
 
     function clusterHtml(names) {
@@ -525,28 +669,28 @@
       var info = dayInfo(when);
       var count = run.attendee_count || 0;
       var note = run.note
-        ? '<p class="mt-1 text-[17px] text-[#8e8e93] truncate">' + esc(run.note) + '</p>'
+        ? '<p class="mt-1 text-[17px] text-[#8e8e93] dark:text-[#98989f] truncate">' + esc(run.note) + '</p>'
         : '';
 
       var action = '';
       if (!past) {
         action = run.joined
-          ? '<button type="button" class="join-btn shrink-0 px-5 py-2.5 rounded-full bg-[#e9e9ef] text-[#8e8e93] text-[17px] font-semibold" data-id="' + run.id + '" data-joined="1">Joined</button>'
+          ? '<button type="button" class="join-btn shrink-0 px-5 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] text-[17px] font-semibold" data-id="' + run.id + '" data-joined="1">Joined</button>'
           : '<button type="button" class="join-btn shrink-0 px-6 py-2.5 rounded-full bg-[#0a7aff] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0">Join</button>';
       }
 
-      return '<div class="run-card un-pressable bg-white rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]" role="button" tabindex="0" data-id="' + run.id + '">' +
+      return '<div class="run-card un-pressable bg-white dark:bg-[#1c1c20] rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]" role="button" tabindex="0" data-id="' + run.id + '">' +
         '<div class="flex gap-3">' + mediaHtml(run) +
           '<div class="min-w-0 flex-1">' +
             '<h3 class="text-[19px] font-bold leading-tight truncate">' + esc(run.location) + '</h3>' +
             '<div class="mt-1.5 flex items-center gap-2">' + badgeHtml(info) +
-              '<span class="run-time text-[17px] text-[#8e8e93]">' + esc(fmtTime(when)) + '</span></div>' +
+              '<span class="run-time text-[17px] text-[#8e8e93] dark:text-[#98989f]">' + esc(fmtTime(when)) + '</span></div>' +
             note +
           '</div>' +
         '</div>' +
         '<div class="mt-3.5 flex items-center justify-between gap-3">' +
           '<div class="flex items-center min-w-0">' + clusterHtml(run.preview) +
-            '<span class="ml-2 text-[17px] text-[#8e8e93] truncate">' + count + ' ' + (past ? 'went' : 'going') + '</span>' +
+            '<span class="ml-2 text-[17px] text-[#8e8e93] dark:text-[#98989f] truncate">' + count + ' ' + (past ? 'went' : 'going') + '</span>' +
           '</div>' + action +
         '</div>' +
       '</div>';
@@ -555,7 +699,7 @@
     function renderList() {
       headingEl.textContent = state.tab === 'past' ? 'PAST RUNS' : 'UPCOMING RUNS';
       if (!state.runs.length) {
-        listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#8e8e93]">' +
+        listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">' +
           (state.tab === 'past'
             ? 'No past runs yet.'
             : 'No upcoming runs. Tap + to post one.') + '</p>';
@@ -564,8 +708,8 @@
       listEl.innerHTML = state.runs.map(cardHtml).join('');
     }
 
-    var TAB_ON = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-white text-[#111114] shadow-[0_1px_3px_rgba(0,0,0,0.08)]';
-    var TAB_OFF = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#8e8e93] shadow-none';
+    var TAB_ON = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]';
+    var TAB_OFF = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none';
 
     function renderTabs() {
       document.getElementById('tab-upcoming').className =
@@ -595,12 +739,12 @@
       var action = '';
       if (!isPast && !run.is_organizer) {
         action = run.joined
-          ? '<button id="detail-action" type="button" data-action="leave" class="shrink-0 px-6 py-2.5 rounded-full bg-[#e9e9ef] text-[#6b6b73] text-[17px] font-semibold">Leave</button>'
+          ? '<button id="detail-action" type="button" data-action="leave" class="shrink-0 px-6 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8] text-[17px] font-semibold">Leave</button>'
           : '<button id="detail-action" type="button" data-action="join" class="shrink-0 px-7 py-2.5 rounded-full bg-[#0a7aff] text-white text-[17px] font-semibold">Join</button>';
       }
 
       var note = run.note
-        ? '<p class="mt-1 text-[17px] text-[#8e8e93]">' + esc(run.note) + '</p>'
+        ? '<p class="mt-1 text-[17px] text-[#8e8e93] dark:text-[#98989f]">' + esc(run.note) + '</p>'
         : '';
 
       // Only rendered when the run has a photo; contributes nothing to the
@@ -610,18 +754,18 @@
         : '';
 
       var summary =
-        '<div class="bg-white rounded-2xl p-4">' +
+        '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl p-4">' +
           '<div class="flex gap-3">' + mediaHtml(run, 'lg') +
             '<div class="min-w-0 flex-1">' +
               '<h2 class="text-[19px] font-bold leading-tight">' + esc(run.location) + '</h2>' +
-              '<p class="mt-1 text-[17px] font-semibold text-[#0a7aff]">' + esc(info.label) + ' · ' +
+              '<p class="mt-1 text-[17px] font-semibold text-[#0a7aff] dark:text-[#5aa9ff]">' + esc(info.label) + ' · ' +
                 '<span class="run-time">' + esc(fmtTime(when)) + '</span></p>' +
               note +
             '</div>' +
           '</div>' +
-          '<div class="mt-4 pt-4 border-t border-[#ececf0] flex items-center justify-between gap-3">' +
+          '<div class="mt-4 pt-4 border-t border-[#ececf0] dark:border-[#2c2c31] flex items-center justify-between gap-3">' +
             '<div class="flex items-center gap-3 min-w-0">' + avatarHtml(run.organizer_username, 'lg') +
-              '<span class="min-w-0 text-[17px] leading-snug text-[#8e8e93] break-words">Organized by ' + esc(run.organizer_username) + '</span>' +
+              '<span class="min-w-0 text-[17px] leading-snug text-[#8e8e93] dark:text-[#98989f] break-words">Organized by ' + esc(run.organizer_username) + '</span>' +
             '</div>' + action +
           '</div>' +
         '</div>';
@@ -630,9 +774,9 @@
       // off; the short ones stay on a single right-aligned line.
       function infoRow(iconPath, label, value, blue, wrap) {
         return '<div class="flex items-center gap-3 px-4 py-4">' +
-          '<svg class="shrink-0 text-[#0a7aff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="' + iconPath + '"/></svg>' +
+          '<svg class="shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="' + iconPath + '"/></svg>' +
           '<span class="shrink-0 text-[19px] font-medium">' + esc(label) + '</span>' +
-          '<span class="ml-auto min-w-0 text-[19px] text-right ' + (wrap ? '' : 'truncate ') + (blue ? 'text-[#0a7aff] font-medium' : 'text-[#8e8e93]') + '">' + esc(value) + '</span>' +
+          '<span class="ml-auto min-w-0 text-[19px] text-right ' + (wrap ? '' : 'truncate ') + (blue ? 'text-[#0a7aff] dark:text-[#5aa9ff] font-medium' : 'text-[#8e8e93] dark:text-[#98989f]') + '">' + esc(value) + '</span>' +
         '</div>';
       }
 
@@ -640,7 +784,7 @@
       var CAL = 'M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4';
       var PEOPLE = 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6 6 0 0112 0M17.5 11.5a3 3 0 100-6M18 20a5.5 5.5 0 00-2-4.3';
 
-      var facts = '<div class="bg-white rounded-2xl divide-y divide-[#ececf0]">' +
+      var facts = '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
         infoRow(PIN, 'Where', run.location, false, true) +
         infoRow(CAL, 'When', whenText, true) +
         infoRow(PEOPLE, 'Going', count + (count === 1 ? ' runner' : ' runners'), false) +
@@ -648,7 +792,7 @@
 
       var rows = (attendees || []).map(function (a) {
         var badge = a.is_organizer
-          ? '<span class="px-2 py-0.5 rounded-md bg-[#dbeafe] text-[#0a7aff] text-[14px] font-semibold">Organizer</span>'
+          ? '<span class="px-2 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#12243d] text-[#0a7aff] dark:text-[#5aa9ff] text-[14px] font-semibold">Organizer</span>'
           : '';
         return '<div class="flex items-center gap-3 px-4 py-3.5">' +
           avatarHtml(a.username, 'lg') +
@@ -658,14 +802,14 @@
       }).join('');
 
       var going = '<div>' +
-        '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93]">WHO\'S GOING</h3>' +
+        '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93] dark:text-[#98989f]">WHO\'S GOING</h3>' +
         (rows
-          ? '<div class="bg-white rounded-2xl divide-y divide-[#ececf0]">' + rows + '</div>'
-          : '<div class="bg-white rounded-2xl px-4 py-8 text-center text-[17px] text-[#8e8e93]">Nobody has joined yet.</div>') +
+          ? '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' + rows + '</div>'
+          : '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl px-4 py-8 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">Nobody has joined yet.</div>') +
       '</div>';
 
-      var footnote = '<p class="flex items-start gap-2 px-1 pb-2 text-[15px] leading-snug text-[#8e8e93]">' +
-        '<svg class="mt-0.5 shrink-0 text-[#0a7aff]" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.1"/></svg>' +
+      var footnote = '<p class="flex items-start gap-2 px-1 pb-2 text-[15px] leading-snug text-[#8e8e93] dark:text-[#98989f]">' +
+        '<svg class="mt-0.5 shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.1"/></svg>' +
         (isPast
           ? 'This run has already happened.'
           : run.is_organizer
@@ -688,8 +832,8 @@
     }
 
     // Whole-literal class strings, same reason as the tab states above.
-    var TF_ON = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white text-[#111114] shadow-[0_1px_2px_rgba(0,0,0,0.08)]';
-    var TF_OFF = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] shadow-none';
+    var TF_ON = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]';
+    var TF_OFF = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none';
 
     function renderTimeFormat() {
       ['12', '24'].forEach(function (value) {
@@ -702,6 +846,87 @@
       // rendering, without depending on the container's timezone.
       document.getElementById('app').setAttribute('data-time-format', state.timeFormat);
     }
+
+    /* -- Mode tampilan: one icon, three choices --------------------- */
+
+    // window.RunClubTheme (the <head> script) owns the preference itself.
+    // Everything here is presentation: which glyph the header shows and
+    // which menu the tap opens.
+    var THEME_META = {
+      dark: { label: 'Gelap', glyph: '<path d="M20.5 14.7A8.6 8.6 0 019.3 3.5a8.6 8.6 0 1011.2 11.2z"/>' },
+      light: { label: 'Terang', glyph: '<circle cx="12" cy="12" r="4.1"/><path d="M12 2.6v2.1M12 19.3v2.1M2.6 12h2.1M19.3 12h2.1M5.3 5.3l1.5 1.5M17.2 17.2l1.5 1.5M18.7 5.3l-1.5 1.5M6.8 17.2l-1.5 1.5"/>' },
+      system: { label: 'Sistem', glyph: '<rect x="3" y="4.3" width="18" height="12.4" rx="2.1"/><path d="M9 20.2h6"/>' },
+    };
+
+    function themeSvg(mode, size) {
+      return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" ' +
+        'fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" ' +
+        'stroke-linejoin="round">' + THEME_META[mode].glyph + '</svg>';
+    }
+
+    // The kit wants a real node per row, used rather than cloned, so each
+    // call builds a fresh one.
+    function themeIconEl(mode) {
+      var holder = document.createElement('span');
+      holder.innerHTML = themeSvg(mode, 20);
+      return holder.firstElementChild;
+    }
+
+    function renderTheme() {
+      var mode = RunClubTheme.mode();
+      var label = 'Mode tampilan: ' + THEME_META[mode].label;
+      var buttons = document.querySelectorAll('.theme-btn');
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].innerHTML = themeSvg(mode, 22);
+        // Lets an automated check assert which mode the header is actually
+        // advertising, without depending on the runner's OS preference.
+        buttons[i].setAttribute('data-theme-mode', mode);
+        buttons[i].setAttribute('aria-label', label);
+        buttons[i].setAttribute('title', label);
+      }
+    }
+
+    function chooseTheme(mode) {
+      RunClubTheme.set(mode);
+      notify('Mode tampilan: ' + THEME_META[mode].label + '.');
+    }
+
+    function openThemeMenu(anchorEl) {
+      var current = RunClubTheme.mode();
+      // unNative.menu is an action sheet on a phone and an anchored
+      // popover on a desktop, from this one call site.
+      if (!(window.unNative && unNative.menu)) {
+        // No kit (standalone or local dev): cycle through the three modes
+        // so the control still does something honest.
+        var order = RunClubTheme.MODES;
+        chooseTheme(order[(order.indexOf(current) + 1) % order.length]);
+        return;
+      }
+      var items = RunClubTheme.MODES.map(function (mode) {
+        return {
+          // The kit has no checked state for a row, so the active one is
+          // marked in its own label.
+          label: THEME_META[mode].label + (mode === current ? '  ✓' : ''),
+          value: mode,
+          iconEl: themeIconEl(mode),
+        };
+      });
+      unNative.menu({
+        anchorEl: anchorEl,
+        title: 'Mode tampilan',
+        items: items,
+        cancelLabel: 'Tutup',
+      }).then(function (choice) {
+        if (choice) chooseTheme(choice.value);
+      }).catch(function () { /* dismissed */ });
+    }
+
+    // Fires on a tap here and on an OS switch while the mode is System.
+    RunClubTheme.subscribe(renderTheme);
+
+    document.querySelectorAll('.theme-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () { openThemeMenu(btn); });
+    });
 
     function render() {
       renderTimeFormat();
@@ -729,36 +954,36 @@
     function buildSheet() {
       var wrap = document.createElement('div');
       wrap.className = 'pb-1';
-      var ROW = 'flex items-center gap-3 rounded-2xl border border-[#e4e4ea] px-4 py-4';
-      var LABEL = 'shrink-0 w-[64px] text-[17px] text-[#6b6b73]';
-      var FIELD = 'flex-1 min-w-0 bg-transparent outline-none text-[17px] text-[#111114] placeholder:text-[#b6b6bd]';
+      var ROW = 'flex items-center gap-3 rounded-2xl border border-[#e4e4ea] dark:border-[#33333a] px-4 py-4';
+      var LABEL = 'shrink-0 w-[64px] text-[17px] text-[#6b6b73] dark:text-[#b0b0b8]';
+      var FIELD = 'flex-1 min-w-0 bg-transparent outline-none text-[17px] text-[#111114] dark:text-[#f2f2f7] placeholder:text-[#b6b6bd] dark:placeholder:text-[#6f6f78]';
 
       wrap.innerHTML =
         '<div class="flex items-center justify-between gap-3">' +
           '<h2 class="text-[30px] font-extrabold tracking-tight">New Run</h2>' +
-          '<button id="sheet-close" type="button" aria-label="Close" class="un-touch-target shrink-0 w-9 h-9 rounded-full bg-[#e9e9ef] text-[#8e8e93] flex items-center justify-center">' +
+          '<button id="sheet-close" type="button" aria-label="Close" class="un-touch-target shrink-0 w-9 h-9 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] flex items-center justify-center">' +
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
           '</button>' +
         '</div>' +
         '<div class="mt-5 space-y-3">' +
           '<label class="' + ROW + '">' +
-            '<svg class="shrink-0 text-[#23a455]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
+            '<svg class="shrink-0 text-[#23a455] dark:text-[#4ed07f]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
             '<span class="' + LABEL + '">Where</span>' +
             '<input id="f-where" type="text" maxlength="120" autocomplete="off" placeholder="e.g. Riverside Park" class="' + FIELD + '">' +
           '</label>' +
           '<div class="' + ROW + '">' +
-            '<svg class="shrink-0 text-[#0a7aff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4"/></svg>' +
+            '<svg class="shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4"/></svg>' +
             '<span class="' + LABEL + '">When</span>' +
             '<input id="f-when" type="datetime-local" required aria-label="Date and time" class="' + FIELD + ' text-right">' +
           '</div>' +
           '<label class="' + ROW + '">' +
-            '<svg class="shrink-0 text-[#8b5cf6]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5zM14 3v5h5"/></svg>' +
+            '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5zM14 3v5h5"/></svg>' +
             '<span class="' + LABEL + '">Note</span>' +
             '<input id="f-note" type="text" maxlength="200" autocomplete="off" placeholder="Optional: easy 5k pace" class="' + FIELD + '">' +
           '</label>' +
           '<div id="photo-row">' +
             '<input id="f-photo-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden">' +
-            '<button id="photo-add-btn" type="button" class="un-pressable w-full h-[100px] rounded-2xl border border-dashed border-[#d4d4db] flex flex-col items-center justify-center gap-1.5 text-[#8e8e93]">' +
+            '<button id="photo-add-btn" type="button" class="un-pressable w-full h-[100px] rounded-2xl border border-dashed border-[#d4d4db] dark:border-[#3a3a42] flex flex-col items-center justify-center gap-1.5 text-[#8e8e93] dark:text-[#98989f]">' +
               '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l1.8-2.4A1 1 0 019.6 4h4.8a1 1 0 01.8.6L17 7h3a1 1 0 011 1v11a1 1 0 01-1 1H4a1 1 0 01-1-1V8a1 1 0 011-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg>' +
               '<span class="text-[15px] font-medium">Add photo</span>' +
             '</button>' +
@@ -1084,6 +1309,7 @@
       if (stored) state.timeFormat = stored;
     })();
 
+    renderTheme();
     renderTimeFormat();
     renderTabs();
     loadRuns().then(route);
