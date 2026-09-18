@@ -928,6 +928,34 @@
       btn.addEventListener('click', function () { openThemeMenu(btn); });
     });
 
+    // The declared checks can see the `dark` class and the icon's mode, but
+    // not whether the compiled stylesheet still carries the dark palette: a
+    // class name assembled at runtime, or a content glob that stops matching
+    // this file, would leave every screen light while those assertions stay
+    // green. This reports that gap as an error in the dev console, which the
+    // baseline "loads with no console errors" check fails on. Deliberately
+    // one-sided: it only speaks up when it can positively tell the page is
+    // painted the wrong way round.
+    if (window.usernode && usernode.invariants) {
+      usernode.invariants.register('theme-palette-applied', function () {
+        var want = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+        var bg = getComputedStyle(document.body).backgroundColor || '';
+        var rgb = bg.match(/\d+(\.\d+)?/g);
+        // Transparent, or a colour we cannot read, means the stylesheet has
+        // not landed yet. Not a verdict.
+        if (!rgb || rgb.length < 3) return true;
+        if (rgb.length > 3 && parseFloat(rgb[3]) === 0) return true;
+        var lum = (Number(rgb[0]) * 0.299 + Number(rgb[1]) * 0.587 + Number(rgb[2]) * 0.114);
+        if (want === 'dark' && lum > 160) {
+          return 'mode is dark but the page is painted light (bg ' + bg + '): the dark: utilities are missing from tailwind.css';
+        }
+        if (want === 'light' && lum < 96) {
+          return 'mode is light but the page is painted dark (bg ' + bg + ')';
+        }
+        return true;
+      });
+    }
+
     function render() {
       renderTimeFormat();
       renderTabs();
