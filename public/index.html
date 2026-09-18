@@ -66,6 +66,13 @@
   <title>Run Club</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%230a7aff'/><text x='50' y='68' font-size='52' text-anchor='middle'>%F0%9F%8F%83</text></svg>">
 
+  <!-- Playful rounded type: Baloo 2 for headings, Quicksand for body.
+       Preconnected + font-display: swap so text never blocks on the font
+       and never renders invisible while it loads. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Quicksand:wght@400;500;600;700&display=swap">
+
   <!-- Tailwind, PRECOMPILED for this app. The config lives in
        tailwind.config.js at the repo root; the Dockerfile's builder stage
        compiles it to public/tailwind.css on every image build, so the
@@ -97,6 +104,12 @@
       --un-hairline: #ececf0;
       --un-muted: #8e8e93;
       --un-radius-card: 16px;
+    }
+    /* Headings get the rounder, bolder display face everywhere they occur,
+       including ones injected by JS template strings, so every screen's
+       titles feel more "berkesan" without a font class in each template. */
+    h1, h2, h3 {
+      font-family: 'Baloo 2', ui-sans-serif, system-ui, sans-serif;
     }
     /* Native date/time controls inherit the row's typography instead of
        the browser default, so the When row reads like the other two. */
