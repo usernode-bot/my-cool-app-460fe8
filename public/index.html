@@ -66,7 +66,7 @@
   <title>Run Club</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%230a7aff'/><text x='50' y='68' font-size='52' text-anchor='middle'>%F0%9F%8F%83</text></svg>">
 
-  <!-- Mode tampilan (theme). This runs BEFORE the stylesheet and before any
+  <!-- Display mode (theme). This runs BEFORE the stylesheet and before any
        markup, because the `dark` class it writes onto <html> is what the
        compiled `dark:` utilities key off: resolving the mode after the first
        paint is exactly what makes a dark boot flash light first.
@@ -308,7 +308,7 @@
           <!-- The glyph itself is drawn by renderTheme() so it always shows
                the mode that is actually in force. -->
           <button id="theme-btn" type="button" class="theme-btn un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center"
-            aria-label="Mode tampilan" title="Mode tampilan"></button>
+            aria-label="Display mode" title="Display mode"></button>
           <button id="new-run-btn" type="button" aria-label="Post a new run"
             class="un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
@@ -349,7 +349,7 @@
         </button>
         <div class="shrink-0 flex items-center gap-2">
         <button id="theme-btn-detail" type="button" class="theme-btn un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center"
-          aria-label="Mode tampilan" title="Mode tampilan"></button>
+          aria-label="Display mode" title="Display mode"></button>
         <button id="more-btn" type="button" aria-label="More options"
           class="un-touch-target w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
@@ -847,15 +847,15 @@
       document.getElementById('app').setAttribute('data-time-format', state.timeFormat);
     }
 
-    /* -- Mode tampilan: one icon, three choices --------------------- */
+    /* -- Display mode: one icon, three choices --------------------- */
 
     // window.RunClubTheme (the <head> script) owns the preference itself.
     // Everything here is presentation: which glyph the header shows and
     // which menu the tap opens.
     var THEME_META = {
-      dark: { label: 'Gelap', glyph: '<path d="M20.5 14.7A8.6 8.6 0 019.3 3.5a8.6 8.6 0 1011.2 11.2z"/>' },
-      light: { label: 'Terang', glyph: '<circle cx="12" cy="12" r="4.1"/><path d="M12 2.6v2.1M12 19.3v2.1M2.6 12h2.1M19.3 12h2.1M5.3 5.3l1.5 1.5M17.2 17.2l1.5 1.5M18.7 5.3l-1.5 1.5M6.8 17.2l-1.5 1.5"/>' },
-      system: { label: 'Sistem', glyph: '<rect x="3" y="4.3" width="18" height="12.4" rx="2.1"/><path d="M9 20.2h6"/>' },
+      dark: { label: 'Dark', glyph: '<path d="M20.5 14.7A8.6 8.6 0 019.3 3.5a8.6 8.6 0 1011.2 11.2z"/>' },
+      light: { label: 'Light', glyph: '<circle cx="12" cy="12" r="4.1"/><path d="M12 2.6v2.1M12 19.3v2.1M2.6 12h2.1M19.3 12h2.1M5.3 5.3l1.5 1.5M17.2 17.2l1.5 1.5M18.7 5.3l-1.5 1.5M6.8 17.2l-1.5 1.5"/>' },
+      system: { label: 'System', glyph: '<rect x="3" y="4.3" width="18" height="12.4" rx="2.1"/><path d="M9 20.2h6"/>' },
     };
 
     function themeSvg(mode, size) {
@@ -874,7 +874,7 @@
 
     function renderTheme() {
       var mode = RunClubTheme.mode();
-      var label = 'Mode tampilan: ' + THEME_META[mode].label;
+      var label = 'Display mode: ' + THEME_META[mode].label;
       var buttons = document.querySelectorAll('.theme-btn');
       for (var i = 0; i < buttons.length; i++) {
         buttons[i].innerHTML = themeSvg(mode, 22);
@@ -888,7 +888,7 @@
 
     function chooseTheme(mode) {
       RunClubTheme.set(mode);
-      notify('Mode tampilan: ' + THEME_META[mode].label + '.');
+      notify('Display mode: ' + THEME_META[mode].label + '.');
     }
 
     function openThemeMenu(anchorEl) {
@@ -913,9 +913,9 @@
       });
       unNative.menu({
         anchorEl: anchorEl,
-        title: 'Mode tampilan',
+        title: 'Display mode',
         items: items,
-        cancelLabel: 'Tutup',
+        cancelLabel: 'Close',
       }).then(function (choice) {
         if (choice) chooseTheme(choice.value);
       }).catch(function () { /* dismissed */ });
