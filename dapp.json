@@ -39,6 +39,28 @@
       "name": "Run detail shows the seeded photo",
       "path": "/#run/900001",
       "expectSelector": "#detail-photo"
+    },
+    {
+      "id": "home.display-mode",
+      "name": "Header carries the display mode icon",
+      "path": "/",
+      "expectSelector": "#theme-btn[data-theme-mode='system'][aria-label='Display mode: System']",
+      "visual": true,
+      "impact": [
+        "public/index.html",
+        "tailwind.config.js",
+        "styles/**"
+      ]
+    },
+    {
+      "name": "Home renders in dark mode",
+      "path": "/?theme=dark",
+      "expectSelector": "html.dark #app #theme-btn[data-theme-mode='dark'][aria-label='Display mode: Dark']"
+    },
+    {
+      "name": "Run details renders in dark mode",
+      "path": "/?theme=dark#run/900001",
+      "expectSelector": "html.dark #screen-detail:not(.hidden) #theme-btn-detail[data-theme-mode='dark'][aria-label='Display mode: Dark']"
     }
   ],
   "visibility": {

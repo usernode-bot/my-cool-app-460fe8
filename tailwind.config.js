@@ -11,6 +11,12 @@
 const defaultTheme = require('tailwindcss/defaultTheme');
 
 module.exports = {
+  // Class-based dark mode: the theme switcher toggles `dark` on <html>
+  // before the first paint, so every `dark:` utility below is driven by
+  // that one class rather than the OS query directly. That is what lets
+  // "Terang" stay light on a dark-mode phone.
+  darkMode: 'class',
+
   // Every file that can contain a class name. Tailwind's extractor is a
   // regex over source text, so it finds class names written as whole
   // literals — including ones inside JS strings in these files.
