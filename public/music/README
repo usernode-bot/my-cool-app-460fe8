@@ -1,0 +1,22 @@
+run-club-loop.mp3
+
+One track, bundled in the app. The Home header's music toggle plays this
+file and nothing else. No user uploads, no streaming: the loop ships with
+the image, so playing it needs nothing beyond the page itself.
+
+Composition and license
+- The audio is an original instrumental generated for this app from a
+  small synthesis script (procedural drums, bass, chords and lead at
+  100 BPM in A minor). It is not a copy or cut of any existing song.
+- Source: generated in-repo during the music-toggle change; the
+  generator script and its parameters are documented in that change.
+- License: CC0 1.0 Universal (public domain dedication) for the app's
+  own distribution. Anyone who receives this file may play, remix and
+  redistribute it freely with no attribution required.
+
+Encoding
+- 22.05 kHz joint stereo MP3, constant 48 kbps (LAME), 2:34 long,
+  about 0.9 MB. Looping is handled by the audio element's `loop`
+  attribute; the composition starts and ends on the same downbeat so
+  the wrap sounds like the next bar of the same groove rather than a
+  seam.

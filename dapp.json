@@ -1,7 +1,7 @@
 {
   "name": "Run Club",
   "icon": {
-    "emoji": "🏃"
+    "emoji": "\ud83c\udfc3"
   },
   "secrets": [],
   "tests": [
@@ -9,6 +9,16 @@
       "name": "Home lists upcoming runs",
       "path": "/",
       "expectText": "Staging demo: Riverside Park"
+    },
+    {
+      "name": "Music toggle renders on Home",
+      "path": "/",
+      "expectSelector": "#music-btn[data-music-state='off']"
+    },
+    {
+      "name": "Music toggle shows on state when link says so",
+      "path": "/?music=on",
+      "expectSelector": "#music-btn[data-music-state='on']"
     },
     {
       "name": "New Run sheet opens",
@@ -50,6 +60,17 @@
         "public/index.html",
         "tailwind.config.js",
         "styles/**"
+      ]
+    },
+    {
+      "id": "home.music-toggle",
+      "name": "Header carries the music toggle",
+      "path": "/?music=on",
+      "expectSelector": "#music-btn[data-music-state='on']",
+      "visual": true,
+      "impact": [
+        "public/index.html",
+        "public/music/**"
       ]
     },
     {
