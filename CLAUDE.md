@@ -66,13 +66,18 @@ a surface rather than growing the app sideways.
   never assembled at runtime.
 - **No em dashes in user-facing copy.** Platform-wide rule; it applies to
   every label, empty state and toast in `public/index.html`.
-- **Every clock time goes through `fmtTime`.** The am/pm vs 24h toggle works
-  by flipping one value in `state.timeFormat`, so a new screen that renders a
-  time must call the shared helper rather than its own `Intl.DateTimeFormat`.
-  Tag the element `run-time` so the checks can assert on it. The choice is
-  remembered in `localStorage` under `runclub.timeFormat` (plus a
-  `:<username>` key when a token is present), and `?tf=12` / `?tf=24` sets it
-  for a single load without persisting.
+- **Every clock time goes through `fmtTime`.** `state.timeFormat` holds the
+  mode, `auto`, `12` or `24`; `effectiveFormat()` turns `auto` into the
+  locale's own hour cycle, so a new screen that renders a time must call the
+  shared helper rather than its own `Intl.DateTimeFormat`. Tag the element
+  `run-time` so the checks can assert on it (`#app[data-time-format]` is the
+  effective format, `data-time-format-mode` the mode). The locale comes from
+  `?locale=`, then `usernode.getUserLocale()`, then the token's `locale`
+  claim, then `navigator.language`; `null` means "not set" and falls through.
+  The mode is remembered in `localStorage` under `runclub.timeFormat` (plus a
+  `:<username>` key when a token is present), and `auto` is written
+  explicitly rather than by clearing the keys. `?tf=12` / `?tf=24` /
+  `?tf=auto` and `?locale=` set things for a single load without persisting.
 - **The New Run date and time picker is not themeable.** It is a native
   `datetime-local` control, so the operating system decides whether it offers
   am/pm or 24h there. The toggle only governs times the app itself renders.

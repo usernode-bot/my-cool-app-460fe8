@@ -329,8 +329,10 @@
         <h2 id="list-heading" class="text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93] dark:text-[#98989f]">UPCOMING RUNS</h2>
         <div id="time-format" role="group" aria-label="Time format"
           class="shrink-0 flex items-center gap-0.5 p-0.5 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[10px]">
-          <button id="tf-12" type="button" data-format="12" aria-pressed="true"
-            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]">AM/PM</button>
+          <button id="tf-auto" type="button" data-format="auto" aria-pressed="true" title="Follows your language"
+            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]">Auto</button>
+          <button id="tf-12" type="button" data-format="12" aria-pressed="false"
+            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">AM/PM</button>
           <button id="tf-24" type="button" data-format="24" aria-pressed="false"
             class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">24h</button>
         </div>
@@ -385,7 +387,7 @@
       screen: 'home',
       sheet: null,
       me: null,          // resolved from the first API response we own
-      timeFormat: '12',  // '12' (am/pm) or '24'; resolved at boot below
+      timeFormat: 'auto', // mode: 'auto' (follow the locale), '12' or '24'; resolved at boot below
     };
 
     /* ── Small helpers ─────────────────────────────────────────────── */
@@ -483,20 +485,36 @@
       }
     }
 
-    var locale = safeLocale(navigator.language);
-    if (window.usernode && usernode.getUserLocale) {
-      usernode.getUserLocale().then(function (r) {
-        // null means "no preference set", not English: keep the device
-        // language in that case.
-        var next = r && r.locale ? safeLocale(r.locale) : undefined;
-        if (next) { locale = next; render(); }
-      }).catch(function () {});
-    }
+    // The iframe token's claims, read WITHOUT verifying them. Only used to
+    // pick a storage key and a display locale, never for anything the
+    // server trusts. An offline load has no token at all.
+    var tokenClaims = (function () {
+      if (!token) return null;
+      try {
+        var part = String(token).split('.')[1];
+        if (!part) return null;
+        var b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4) b64 += '=';
+        return JSON.parse(atob(b64)) || null;
+      } catch (err) {
+        return null;
+      }
+    })();
+
+    // Boot-time locale, first valid source wins: an explicit ?locale= (a
+    // test and deep-link hook, never persisted), then the token's platform
+    // locale claim (the same value the server sees as req.user.locale), then
+    // the device language. The claim is null for most users, which means
+    // "not set", not English, so it falls through. The bridge's answer
+    // below overrides all of these when it reports a real preference.
+    var locale = safeLocale(params.get('locale')) ||
+      safeLocale(tokenClaims && tokenClaims.locale) ||
+      safeLocale(navigator.language);
 
     /* ── Time of day: one helper, two formats ──────────────────── */
 
-    // Every clock time on every screen goes through fmtTime, so the toggle
-    // only has to flip one value. `hourCycle` rather than `hour12`: the
+    // Every clock time on every screen goes through fmtTime, so the mode
+    // only has to change one value. `hourCycle` rather than `hour12`: the
     // boolean maps to h24 in a few locales, which renders midnight as
     // "24:00" instead of "00:00".
     var TIME_FORMATS = {
@@ -504,8 +522,28 @@
       '24': { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
     };
 
+    // What the locale itself would use for a plain hour. BCP-47 tags do not
+    // carry a clock preference; the locale's CLDR data does, and Intl
+    // reports it as hourCycle (or the older hour12 boolean).
+    function autoFormatFor(tag) {
+      try {
+        var r = new Intl.DateTimeFormat(tag || undefined, { hour: 'numeric' }).resolvedOptions();
+        if (r.hourCycle) return (r.hourCycle === 'h23' || r.hourCycle === 'h24') ? '24' : '12';
+        if (typeof r.hour12 === 'boolean') return r.hour12 ? '12' : '24';
+      } catch (err) { /* fall through to am/pm */ }
+      return '12';
+    }
+
+    // The format actually rendered: the chosen one, or the locale's own
+    // when the mode is Auto.
+    function effectiveFormat() {
+      if (state.timeFormat === '12' || state.timeFormat === '24') return state.timeFormat;
+      return autoFormatFor(locale);
+    }
+
     function fmtTime(d) {
-      var opts = TIME_FORMATS[state.timeFormat] || TIME_FORMATS['12'];
+      var format = effectiveFormat();
+      var opts = TIME_FORMATS[format];
       try {
         return new Intl.DateTimeFormat(locale, opts).format(d);
       } catch (err) {
@@ -513,7 +551,7 @@
         // rejects it, fall back to the boolean rather than dropping the
         // time off the card entirely.
         return new Intl.DateTimeFormat(locale, {
-          hour: opts.hour, minute: opts.minute, hour12: state.timeFormat !== '24',
+          hour: opts.hour, minute: opts.minute, hour12: format !== '24',
         }).format(d);
       }
     }
@@ -522,23 +560,13 @@
 
     var FORMAT_KEY = 'runclub.timeFormat';
 
+    var FORMAT_MODES = { auto: 1, '12': 1, '24': 1 };
+
     // The token carries the signed-in username, so the preference can be
-    // namespaced per person on a shared device. This reads the claim
-    // without verifying it, which is fine for picking a storage key and
-    // nothing else. An offline load arrives with no token at all, hence
-    // the shared key below as well.
+    // namespaced per person on a shared device. An offline load arrives
+    // with no token at all, hence the shared key below as well.
     function tokenUsername() {
-      if (!token) return '';
-      try {
-        var part = String(token).split('.')[1];
-        if (!part) return '';
-        var b64 = part.replace(/-/g, '+').replace(/_/g, '/');
-        while (b64.length % 4) b64 += '=';
-        var claims = JSON.parse(atob(b64));
-        return claims && claims.username ? String(claims.username) : '';
-      } catch (err) {
-        return '';
-      }
+      return tokenClaims && tokenClaims.username ? String(tokenClaims.username) : '';
     }
 
     var formatKeys = (function () {
@@ -553,7 +581,7 @@
       for (var i = 0; i < formatKeys.length; i++) {
         try {
           var v = window.localStorage.getItem(formatKeys[i]);
-          if (v === '12' || v === '24') return v;
+          if (FORMAT_MODES[v]) return v;
         } catch (err) {
           return '';
         }
@@ -571,8 +599,11 @@
       } catch (err) { /* storage refused: this load still honours the choice */ }
     }
 
+    // Auto is written explicitly rather than by clearing the keys: the
+    // per-user key has to shadow a shared-key value left by someone else
+    // on the same device.
     function setFormat(value) {
-      if (value !== '12' && value !== '24') return;
+      if (!FORMAT_MODES[value]) return;
       if (state.timeFormat === value) return;
       state.timeFormat = value;
       writeFormat(value);
@@ -836,7 +867,7 @@
     var TF_OFF = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none';
 
     function renderTimeFormat() {
-      ['12', '24'].forEach(function (value) {
+      ['auto', '12', '24'].forEach(function (value) {
         var btn = document.getElementById('tf-' + value);
         var on = state.timeFormat === value;
         btn.className = on ? TF_ON : TF_OFF;
@@ -844,7 +875,9 @@
       });
       // Lets an automated check assert which format the screen is actually
       // rendering, without depending on the container's timezone.
-      document.getElementById('app').setAttribute('data-time-format', state.timeFormat);
+      var app = document.getElementById('app');
+      app.setAttribute('data-time-format', effectiveFormat());
+      app.setAttribute('data-time-format-mode', state.timeFormat);
     }
 
     /* -- Display mode: one icon, three choices --------------------- */
@@ -961,6 +994,55 @@
       renderTabs();
       renderList();
       renderDetail();
+    }
+
+    /* -- Time format menu (run details) ---------------------------- */
+
+    var FORMAT_LABELS = { auto: 'Auto', '12': 'AM/PM', '24': '24h' };
+    var FORMAT_ORDER = ['auto', '12', '24'];
+
+    // Same shape as the Display mode menu: a titled list with the current
+    // row marked in its own label, since the kit has no checked state.
+    function openTimeFormatMenu(anchorEl) {
+      var current = state.timeFormat;
+      if (!(window.unNative && unNative.menu)) {
+        setFormat(FORMAT_ORDER[(FORMAT_ORDER.indexOf(current) + 1) % FORMAT_ORDER.length]);
+        return;
+      }
+      unNative.menu({
+        anchorEl: anchorEl,
+        title: 'Time format',
+        items: FORMAT_ORDER.map(function (value) {
+          return { label: FORMAT_LABELS[value] + (value === current ? '  ✓' : ''), value: value };
+        }),
+        cancelLabel: 'Close',
+      }).then(function (choice) {
+        if (choice) setFormat(choice.value);
+      }).catch(function () { /* dismissed */ });
+    }
+
+    /* -- Platform locale ------------------------------------------- */
+
+    // In Auto the clock shape follows the locale, so a new locale re-renders
+    // everything. A manual choice ignores it for times; dates still follow.
+    function adoptLocale(tag) {
+      if (!tag || tag === locale) return;
+      locale = tag;
+      render();
+    }
+
+    // An explicit ?locale= is a test hook and wins over the platform, so a
+    // check pinned to en-GB stays en-GB. null from the bridge means "no
+    // preference set", not English: keep the boot value then.
+    if (!safeLocale(params.get('locale'))) {
+      if (window.usernode && usernode.getUserLocale) {
+        usernode.getUserLocale().then(function (r) {
+          adoptLocale(r && r.locale ? safeLocale(r.locale) : undefined);
+        }).catch(function () {});
+      }
+      window.addEventListener('usernode:locale-changed', function (e) {
+        adoptLocale(e && e.detail ? safeLocale(e.detail.locale) : undefined);
+      });
     }
 
     /* ── Screen switching ──────────────────────────────────────────── */
@@ -1207,16 +1289,13 @@
         items.push({ label: 'Leave run', destructive: true, value: 'leave' });
       }
       // The detail screen shows a time but has no room for the segmented
-      // control, so the same choice lives here.
-      items.push({
-        label: state.timeFormat === '24' ? 'Show am/pm times' : 'Show 24 hour times',
-        value: 'timeformat',
-      });
+      // control, so the same choice lives here, one level down.
+      items.push({ label: 'Time format', value: 'timeformat' });
       unNative.menu({ anchorEl: e.currentTarget, items: items, cancelLabel: 'Cancel' })
         .then(function (choice) {
           if (!choice) return;
           if (choice.value === 'timeformat') {
-            setFormat(state.timeFormat === '24' ? '12' : '24');
+            openTimeFormatMenu(e.currentTarget);
             return;
           }
           if (choice.value === 'leave') {
@@ -1320,16 +1399,16 @@
 
     /* ── Boot ──────────────────────────────────────────────────────── */
 
-    // Precedence: an explicit ?tf= deep link, then the remembered choice,
-    // then am/pm so nothing changes for anyone who never touches the
-    // toggle. The link is pure view state with no database write, so it is
+    // Precedence: an explicit ?tf= deep link (12, 24 or auto), then the
+    // remembered choice, then Auto so the locale decides for anyone who
+    // never touches the switch. The link is pure view state with no database write, so it is
     // deliberately not staging-gated: the "before" screenshot is taken
     // against production. It is also deliberately NOT persisted, so a link
     // shared for a screenshot cannot quietly re-set the reader's own
     // choice, and so the default stays the default on the next plain load.
     (function resolveFormat() {
       var linked = params.get('tf');
-      if (linked === '12' || linked === '24') {
+      if (FORMAT_MODES[linked]) {
         state.timeFormat = linked;
         return;
       }
