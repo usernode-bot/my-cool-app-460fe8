@@ -311,6 +311,33 @@ app.delete('/api/runs/:id', async (req, res) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Before it: the compiled stylesheet (public/tailwind.css) and the hosted
+// bridge / native kit paths. The stylesheet only exists inside the image,
+// and platform convention requires the canonical files at /usernode-* to
+// come from the platform, not a per-app fork. Registered here so the
+// catch-all below cannot swallow them and log a 401 on every tokenless
+// load (the check browser navigates with no token).
+app.get('/tailwind.css', (req, res) =>
+  res.sendFile(path.join(__dirname, 'public', 'tailwind.css')));
+['native.css', 'native.js', 'bridge.js'].forEach((file) => {
+  const subPath = file === 'bridge.js'
+    ? '/usernode-bridge/v1/bridge.js'
+    : '/usernode-native/v1/' + file;
+  if (PLATFORM_ORIGIN) {
+    // In the platform the canonical files ship from the platform edge on
+    // the app's own origin already, so this handler never even runs; but
+    // if the edge is ever bypassed, redirect rather than proxy: this app
+    // has no way to fetch the canonical copy itself.
+    app.get(subPath, (req, res) => res.redirect(302, PLATFORM_ORIGIN + subPath));
+  } else {
+    // Outside the platform (local runs, in-loop checks) the files are not
+    // in the repo by convention, so serve an inert stub: it keeps the page
+    // from logging console errors, and every call site degrades on its own
+    // (toast, menu, sheet, transitions are all kit-gated).
+    app.get(subPath, (req, res) => res.type('js').send('/* hosted file not available outside the platform */'));
+  }
+});
+
 // HTML shell: serve the app if authenticated. Unauthenticated top-level
 // visits (share links pasted into a browser — Sec-Fetch-Dest: document)
 // are sent to the platform's chromeless view of this app, where the shell

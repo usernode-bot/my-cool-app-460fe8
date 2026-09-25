@@ -8,7 +8,13 @@ Built on Usernode Social Vibecoding.
 
 - **Home** lists runs under two tabs, **Upcoming** and **Past**. Each card
   shows where the run is, a Today / Tomorrow / date badge with the start
-  time, an optional note, who is going, and a Join button.
+  time, an optional note, who is going, and a Join button. The header also
+  carries a music toggle: one bundled instrumental loop, on or off, with
+  the choice remembered in `localStorage` under `runclub.music` (plus a
+  `:<username>` key when a token is present). `?music=on` sets the state
+  for a single load without persisting. The audio lives at
+  `public/music/run-club-loop.mp3`; see the README in that folder for its
+  composition and license.
 - **New Run** is a bottom sheet behind the + button: where, when, and an
   optional note. Posting a run makes you its organizer and counts you as
   going.
