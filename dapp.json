@@ -16,6 +16,36 @@
       "expectSelector": "#post-run-btn"
     },
     {
+      "id": "home.card-actions",
+      "name": "Run cards carry inline quick actions",
+      "path": "/",
+      "expectSelector": "#run-list .run-card .card-actions .card-share-btn",
+      "visual": true,
+      "impact": [
+        "public/index.html",
+        "server.js",
+        "styles/**"
+      ]
+    },
+    {
+      "name": "Mine deep link opens the Mine list empty state",
+      "path": "/?mine=1",
+      "expectText": "MY RUNS",
+      "expectSelector": "#tab-mine[data-tab='mine']"
+    },
+    {
+      "name": "Plain home load keeps Upcoming selected",
+      "path": "/",
+      "expectText": "UPCOMING RUNS",
+      "expectSelector": "#run-list .run-card .card-actions .card-share-btn"
+    },
+    {
+      "name": "Home cards do not offer actions that need an organizer identity",
+      "path": "/",
+      "expectText": "Staging demo: Harbor Promenade",
+      "expectSelector": "#run-list .run-card .card-actions .card-view-btn"
+    },
+    {
       "name": "Run details shows Who's Going",
       "path": "/#run/900001",
       "expectText": "staging-demo-maya"

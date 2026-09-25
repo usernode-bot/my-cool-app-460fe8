@@ -141,15 +141,25 @@ const RUN_SELECT = `
 `;
 
 // List runs. `upcoming` is the default tab: anything that has not started
-// yet, soonest first. `past` reads the other way and is capped.
+// yet, soonest first. `past` reads the other way and is capped. `mine=1`
+// keeps only runs the caller organizes or joined (the "Mine" tab; without
+// an authenticated caller it is simply an empty list).
 app.get('/api/runs', async (req, res) => {
   const past = req.query.filter === 'past';
+  const mine = req.query.mine === '1';
   try {
+    let where = mine
+      ? ` WHERE (r.organizer_id = $1 OR EXISTS (
+             SELECT 1 FROM run_attendees a
+             WHERE a.run_id = r.id AND a.user_id = $1))`
+      : '';
+    where += (where ? ' AND' : ' WHERE') +
+      (past
+        ? ` r.starts_at < NOW() ORDER BY r.starts_at DESC LIMIT 50`
+        : ` r.starts_at >= NOW() ORDER BY r.starts_at ASC LIMIT 100`);
     const { rows } = await pool.query(
       RUN_SELECT +
-        (past
-          ? ` WHERE r.starts_at < NOW() ORDER BY r.starts_at DESC LIMIT 50`
-          : ` WHERE r.starts_at >= NOW() ORDER BY r.starts_at ASC LIMIT 100`),
+        where,
       [callerId(req)]
     );
     res.json({ runs: rows });

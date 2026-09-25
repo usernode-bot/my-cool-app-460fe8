@@ -318,11 +318,13 @@
         </div>
       </header>
 
-      <div class="mt-6 grid grid-cols-2 gap-1 p-1 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[14px]">
+      <div class="mt-6 grid grid-cols-3 gap-1 p-1 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[14px]">
         <button id="tab-upcoming" type="button" data-tab="upcoming"
           class="rounded-[11px] py-2.5 text-[17px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]">Upcoming</button>
         <button id="tab-past" type="button" data-tab="past"
           class="rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">Past</button>
+        <button id="tab-mine" type="button" data-tab="mine"
+          class="rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">Mine</button>
       </div>
 
       <div class="mt-6 mb-3 px-1 flex items-center justify-between gap-3">
@@ -663,21 +665,52 @@
 
     /* ── Home list ─────────────────────────────────────────────────── */
 
+    // Reveal-on-hover (desktop) or tap (touch) action buttons. Class
+    // strings are whole literals so Tailwind's extractor can see them; the
+    // open/closed state is set in updateCardReveal().
+    var ACTION_BTN = 'un-touch-target shrink-0 h-[38px] px-3.5 rounded-full ' +
+      'bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8] ' +
+      'text-[15px] font-semibold hover:text-[#111114] dark:hover:text-white';
+    var ACTION_ROW = 'card-actions mt-3.5 flex items-center justify-end gap-1.5 ' +
+      'opacity-0 transition-opacity duration-150 pointer-events-none ' +
+      'max-lg:opacity-100 max-lg:pointer-events-auto ' +
+      '[.card-open_&]:opacity-100 [.card-open_&]:pointer-events-auto ' +
+      'focus-within:opacity-100 focus-within:pointer-events-auto';
+
     function cardHtml(run) {
       var past = state.tab === 'past';
       var when = new Date(run.starts_at);
       var info = dayInfo(when);
       var count = run.attendee_count || 0;
+      var isPastRun = new Date(run.starts_at).getTime() < Date.now();
       var note = run.note
         ? '<p class="mt-1 text-[17px] text-[#8e8e93] dark:text-[#98989f] truncate">' + esc(run.note) + '</p>'
         : '';
 
       var action = '';
-      if (!past) {
+      if (!past && !state.mine) {
         action = run.joined
           ? '<button type="button" class="join-btn shrink-0 px-5 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] text-[17px] font-semibold" data-id="' + run.id + '" data-joined="1">Joined</button>'
           : '<button type="button" class="join-btn shrink-0 px-6 py-2.5 rounded-full bg-[#0a7aff] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0">Join</button>';
       }
+
+      // Inline quick actions, revealed on hover (desktop) or tap (touch).
+      // The destructive slot matches what the caller can actually do: an
+      // organizer's upcoming run can be Cancelled, a joined run can be
+      // Left, and a past run offers neither, same as the detail screen.
+      var destructive = '';
+      if (run.is_organizer && !isPastRun) {
+        destructive = '<button type="button" class="card-cancel-btn ' + ACTION_BTN + ' text-[#e5484d] dark:text-[#ff6369]" data-id="' + run.id + '">Cancel</button>';
+      } else if (!isPastRun && run.joined && !run.is_organizer) {
+        destructive = '<button type="button" class="card-leave-btn ' + ACTION_BTN + '" data-id="' + run.id + '">Leave</button>';
+      }
+      var actions =
+        '<div class="' + ACTION_ROW + '">' +
+          '<button type="button" class="card-view-btn ' + ACTION_BTN + '" data-id="' + run.id + '">Open</button>' +
+          '<button type="button" class="card-share-btn ' + ACTION_BTN + '" data-id="' + run.id + '">Share</button>' +
+          (run.is_organizer ? '<button type="button" class="card-dup-btn ' + ACTION_BTN + '" data-id="' + run.id + '">Duplicate</button>' : '') +
+          destructive +
+        '</div>';
 
       return '<div class="run-card un-pressable bg-white dark:bg-[#1c1c20] rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]" role="button" tabindex="0" data-id="' + run.id + '">' +
         '<div class="flex gap-3">' + mediaHtml(run) +
@@ -693,19 +726,24 @@
             '<span class="ml-2 text-[17px] text-[#8e8e93] dark:text-[#98989f] truncate">' + count + ' ' + (past ? 'went' : 'going') + '</span>' +
           '</div>' + action +
         '</div>' +
+        actions +
       '</div>';
     }
 
     function renderList() {
-      headingEl.textContent = state.tab === 'past' ? 'PAST RUNS' : 'UPCOMING RUNS';
+      headingEl.textContent = state.tab === 'past' ? 'PAST RUNS'
+        : (state.tab === 'mine' ? 'MY RUNS' : 'UPCOMING RUNS');
       if (!state.runs.length) {
-        listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">' +
-          (state.tab === 'past'
-            ? 'No past runs yet.'
-            : 'No upcoming runs. Tap + to post one.') + '</p>';
+        var empty = state.tab === 'past'
+          ? 'No past runs yet.'
+          : (state.tab === 'mine'
+            ? 'Nothing here yet. Post a run and it will show up under Mine.'
+            : 'No upcoming runs. Tap + to post one.');
+        listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">' + empty + '</p>';
         return;
       }
       listEl.innerHTML = state.runs.map(cardHtml).join('');
+      updateCardReveal();
     }
 
     var TAB_ON = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]';
@@ -719,7 +757,7 @@
     }
 
     function loadRuns() {
-      return api('/api/runs?filter=' + state.tab).then(function (data) {
+      return api('/api/runs?filter=' + state.tab + (state.tab === 'mine' ? '&mine=1' : '')).then(function (data) {
         state.runs = data.runs || [];
         renderList();
       }).catch(function (err) {
@@ -1028,7 +1066,9 @@
       return wrap;
     }
 
-    function openSheet() {
+    // `prefill` comes from Duplicate: the copied run's where/when/note.
+    // The photo is deliberately not carried over; the copy starts fresh.
+    function openSheet(prefill) {
       if (state.sheet) return;
       var contentEl = buildSheet();
       var handle = unNative.presentSheet({
@@ -1107,6 +1147,16 @@
       });
       sync();
 
+      if (prefill) {
+        if (prefill.location) where.value = prefill.location;
+        if (prefill.note) note.value = prefill.note;
+        var start = new Date(prefill.starts_at);
+        if (!isNaN(start.getTime())) when.value =
+          start.getFullYear() + '-' + pad(start.getMonth() + 1) + '-' +
+          start.getDate() + 'T' + pad(start.getHours()) + ':' + pad(start.getMinutes());
+        sync();
+      }
+
       contentEl.querySelector('#sheet-close').addEventListener('click', function () {
         handle.dismiss();
       });
@@ -1161,7 +1211,98 @@
       return Promise.all(jobs);
     }
 
+    // One card open at a time. On a coarse pointer (phones/tablets) the
+    // row is always visible via max-lg:; on desktop hover opens it and
+    // this toggle closes it again when the pointer moves on.
+    function updateCardReveal(e) {
+      var cards = listEl.querySelectorAll('.run-card');
+      var card = e && e.target && e.target.closest ? e.target.closest('.run-card') : null;
+      cards.forEach(function (el) {
+        el.classList.toggle('card-open', el === card);
+      });
+    }
+
+    function shareRun(id) {
+      var url = location.origin + location.pathname + '#run/' + id;
+      if (navigator.share) {
+        navigator.share({ title: 'Run Club', url: url }).catch(function () {});
+        return;
+      }
+      var done = function () { notify('Link copied.'); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done, function () { notify('Could not copy the link.'); });
+      } else {
+        notify(url);
+      }
+    }
+
+    function duplicateRun(run) {
+      if (!run || state.sheet) return;
+      setHash('new');
+      openSheet({ location: run.location, note: run.note, starts_at: run.starts_at });
+      notify('Copy the details, then post.');
+    }
+
+    // `run` may be undefined for a card whose data is not on the current
+    // tab's list; the detail load fills in what the dialog needs. The
+    // photo of the source run is deliberately not carried over.
+    function removeRunCard(id, run, kind, btn) {
+      var finish = function () {
+        btn.disabled = true;
+        var call = kind === 'cancel'
+          ? api('/api/runs/' + id, { method: 'DELETE' })
+          : leaveRun(id);
+        return call
+          .then(function () {
+            return (kind === 'cancel' && run && run.photo_file_id && window.usernode && usernode.deleteFile)
+              ? usernode.deleteFile(run.photo_file_id).catch(function () {})
+              : null;
+          })
+          .then(function () { return loadRuns(); })
+          .then(function () {
+            notify(kind === 'cancel' ? 'Run cancelled.' : 'You left this run.');
+            if (state.detail && state.detail.run.id === id) {
+              state.detail = null;
+              setHash('');
+            }
+          })
+          .catch(function (err) { btn.disabled = false; notify(err.message); });
+      };
+      var ask = function (r) {
+        return unNative.alert({
+          title: kind === 'cancel' ? 'Cancel this run?' : 'Leave this run?',
+          message: kind === 'cancel'
+            ? 'Everyone who joined will lose it. This cannot be undone.'
+            : 'This removes your spot on the run.',
+          buttons: [
+            { label: 'Keep it', style: 'cancel' },
+            { label: kind === 'cancel' ? 'Cancel run' : 'Leave run', style: 'destructive' },
+          ],
+        }).then(function (res) {
+          if (!res || !res.button || res.button.style !== 'destructive') return;
+          return finish();
+        }).catch(function (err) { notify(err.message); });
+      };
+      if (run) return ask(run);
+      return api('/api/runs/' + id).then(function (data) {
+        return ask(data.run);
+      }).catch(function (err) { notify(err.message); });
+    }
+
     listEl.addEventListener('click', function (e) {
+      var act = e.target.closest('.card-view-btn, .card-share-btn, .card-dup-btn, .card-cancel-btn, .card-leave-btn');
+      if (act) {
+        e.stopPropagation();
+        var id = parseInt(act.dataset.id, 10);
+        if (!Number.isInteger(id)) return;
+        if (act.classList.contains('card-view-btn')) { setHash('run/' + id); return; }
+        if (act.classList.contains('card-share-btn')) { shareRun(id); return; }
+        var run = state.runs.filter(function (r) { return r.id === id; })[0];
+        if (act.classList.contains('card-dup-btn')) { duplicateRun(run); return; }
+        if (act.classList.contains('card-cancel-btn')) { removeRunCard(id, run, 'cancel', act); return; }
+        if (act.classList.contains('card-leave-btn')) { removeRunCard(id, run, 'leave', act); return; }
+        return;
+      }
       var join = e.target.closest('.join-btn');
       if (join) {
         // The card underneath is itself a button; stop the tap here so a
@@ -1183,6 +1324,9 @@
       var card = e.target.closest('.run-card');
       if (card) { e.preventDefault(); setHash('run/' + card.dataset.id); }
     });
+
+    listEl.addEventListener('mouseover', updateCardReveal);
+    listEl.addEventListener('mouseleave', function () { updateCardReveal(); });
 
     detailBodyEl.addEventListener('click', function (e) {
       var btn = e.target.closest('#detail-action');
@@ -1264,7 +1408,7 @@
       if (btn) setFormat(btn.dataset.format);
     });
 
-    [['tab-upcoming', 'upcoming'], ['tab-past', 'past']].forEach(function (pair) {
+    [['tab-upcoming', 'upcoming'], ['tab-past', 'past'], ['tab-mine', 'mine']].forEach(function (pair) {
       document.getElementById(pair[0]).addEventListener('click', function () {
         if (state.tab === pair[1]) return;
         state.tab = pair[1];
@@ -1336,6 +1480,10 @@
       var stored = readFormat();
       if (stored) state.timeFormat = stored;
     })();
+
+    // Deep link for the Mine tab (?mine=1): selects the tab before the
+    // first load. Pure view state, deliberately not persisted.
+    if (params.get('mine') === '1') state.tab = 'mine';
 
     renderTheme();
     renderTimeFormat();
