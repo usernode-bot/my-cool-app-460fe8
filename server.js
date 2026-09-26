@@ -112,6 +112,9 @@ const MAX_PHOTO_FILE_ID = 64;
 // Generous for club runs; the cap keeps the field honest, not a rule
 // about how far people may run.
 const MAX_DURATION_MINUTES = 600;
+// Planned distance range in kilometres, enforced in POST /api/runs.
+// Optional: a run without one simply never matches a distance chip.
+const MAX_DISTANCE_KM = 200;
 // Preset run types. Keep in sync with PRESET_TYPES in public/index.html:
 // the server is authoritative for validation, the frontend list drives the
 // picker, and a label is only valid if BOTH sides know it.
@@ -138,6 +141,7 @@ const RUN_SELECT = `
   SELECT r.id, r.location, r.note, r.starts_at,
          r.organizer_id, r.organizer_username,
          r.photo_url, r.photo_file_id, r.type_label, r.duration_minutes,
+         r.distance_km,
          r.meeting_point, r.meeting_lat, r.meeting_lng,
          (SELECT COUNT(*) FROM run_attendees a WHERE a.run_id = r.id)::int
            AS attendee_count,
@@ -401,6 +405,17 @@ app.post('/api/runs', async (req, res) => {
     }
     durationMinutes = parsed;
   }
+  // Planned distance is optional, in kilometres, kept to one decimal so
+  // "21.1" stores as a half marathon rather than a float fingerprint.
+  const rawDistance = req.body?.distance_km;
+  let distanceKm = null;
+  if (rawDistance !== undefined && rawDistance !== null && String(rawDistance).trim() !== '') {
+    const parsed = Number(rawDistance);
+    if (!Number.isFinite(parsed) || parsed < 0.5 || parsed > MAX_DISTANCE_KM) {
+      return res.status(400).json({ error: 'Use a distance between 0.5 and 200 km.' });
+    }
+    distanceKm = Math.round(parsed * 10) / 10;
+  }
 
   const client = await pool.connect();
   try {
@@ -408,8 +423,8 @@ app.post('/api/runs', async (req, res) => {
     // together or not at all.
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id, type_label, duration_minutes, meeting_point, meeting_lat, meeting_lng)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id, type_label, duration_minutes, distance_km, meeting_point, meeting_lat, meeting_lng)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
       [
         location,
         rawNote || null,
@@ -420,6 +435,7 @@ app.post('/api/runs', async (req, res) => {
         photoFileId || null,
         typeLabel,
         durationMinutes,
+        distanceKm,
         rawMeeting || null,
         rawMeeting ? meetingLat : null,
         rawMeeting ? meetingLng : null,
@@ -787,6 +803,7 @@ const SEED_RUNS = [
     note: 'easy 5k, ~6:30/km',
     type: 'Staging demo: Trail',
     duration: 30,
+    distance: 5,
     dayOffset: 0,
     hour: 18,
     minute: 30,
@@ -805,6 +822,7 @@ const SEED_RUNS = [
     note: null,
     type: null,
     dayOffset: 1,
+    distance: 10,
     hour: 7,
     minute: 0,
     organizer: [-902, 'staging-demo-ethan'],
@@ -819,10 +837,22 @@ const SEED_RUNS = [
     note: 'hills, take it steady',
     type: null,
     dayOffset: -3,
+    distance: 21,
     hour: 8,
     minute: 0,
     organizer: [-903, 'staging-demo-nina'],
     joiners: [[-901, 'staging-demo-maya'], [-902, 'staging-demo-ethan']],
+  },
+  {
+    id: 900004,
+    location: 'Staging demo: Meadow loop',
+    note: null,
+    type: null,
+    dayOffset: 2,
+    hour: 9,
+    minute: 0,
+    organizer: [-901, 'staging-demo-maya'],
+    joiners: [],
   },
 ];
 
@@ -842,10 +872,11 @@ function seedStartsAt(dayOffset, hour, minute) {
 async function seedStaging() {
   for (const run of SEED_RUNS) {
     await pool.query(
-      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url, type_label, duration_minutes, meeting_point, meeting_lat, meeting_lng)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url, type_label, duration_minutes, distance_km, meeting_point, meeting_lat, meeting_lng)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        ON CONFLICT (id) DO UPDATE SET starts_at = EXCLUDED.starts_at,
-         duration_minutes = EXCLUDED.duration_minutes`,
+         duration_minutes = EXCLUDED.duration_minutes,
+         distance_km = EXCLUDED.distance_km`,
       [
         run.id,
         run.location,
@@ -856,6 +887,7 @@ async function seedStaging() {
         run.photoUrl || null,
         run.type || null,
         run.duration || null,
+        run.distance || null,
         run.meeting || null,
         run.meeting ? run.meetingLat : null,
         run.meeting ? run.meetingLng : null,
@@ -957,6 +989,7 @@ async function migrate() {
     ALTER TABLE runs
       ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500),
       ADD COLUMN IF NOT EXISTS photo_file_id VARCHAR(64),
+      ADD COLUMN IF NOT EXISTS distance_km DOUBLE PRECISION,
       ADD COLUMN IF NOT EXISTS meeting_point VARCHAR(120),
       ADD COLUMN IF NOT EXISTS meeting_lat DOUBLE PRECISION,
       ADD COLUMN IF NOT EXISTS meeting_lng DOUBLE PRECISION

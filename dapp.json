@@ -169,7 +169,11 @@
       "expectSelector": "#detail-body .staticmap",
       "expectText": "Staging demo: Main gate",
       "visual": true,
-      "impact": ["public/index.html", "styles/**", "server.js"]
+      "impact": [
+        "public/index.html",
+        "styles/**",
+        "server.js"
+      ]
     },
     {
       "id": "home.display-mode",
@@ -234,6 +238,56 @@
       "name": "Past run detail shows the kudos count",
       "path": "/#run/900003",
       "expectText": "3"
+    },
+    {
+      "name": "Home shows distance filter chips",
+      "path": "/",
+      "expectSelector": "#dist-filter #dist-5k"
+    },
+    {
+      "name": "5K chip filters the board to 5K runs",
+      "path": "/?dist=5k",
+      "expectSelector": "#dist-5k[aria-pressed='true']",
+      "expectText": "Staging demo: Riverside Park"
+    },
+    {
+      "name": "10K chip filters the board to 10K runs",
+      "path": "/?dist=10k",
+      "expectSelector": "#dist-10k[aria-pressed='true']",
+      "expectText": "Staging demo: Harbor Promenade"
+    },
+    {
+      "name": "Half chip filters the board to half marathons",
+      "path": "/?dist=half#tab-past",
+      "expectSelector": "#dist-half[aria-pressed='true']",
+      "expectText": "Staging demo: Old Town loop"
+    },
+    {
+      "id": "home.dist-chips",
+      "name": "Distance filter chips above the runs board",
+      "path": "/?dist=5k",
+      "expectSelector": "#dist-filter #dist-5k[aria-pressed='true']",
+      "visual": true,
+      "impact": [
+        "public/**",
+        "server.js"
+      ]
+    },
+    {
+      "name": "New Run sheet shows the Distance row",
+      "path": "/#new",
+      "expectSelector": "#distance-row"
+    },
+    {
+      "name": "Run detail shows the Distance row",
+      "path": "/#run/900001",
+      "expectSelector": "#detail-body [data-distance='1']",
+      "expectText": "5 km"
+    },
+    {
+      "name": "Distanceless run detail keeps its facts unchanged",
+      "path": "/#run/900004",
+      "expectSelector": "#detail-body [data-distance='0']"
     }
   ],
   "visibility": {
