@@ -844,6 +844,9 @@
                 : '') +
               (run.type_label
                 ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] text-[14px] font-semibold">' + esc(run.type_label) + '</span>'
+                : '') +
+              (run.is_pb
+                ? '<span title="Personal best: fastest planned duration so far at this type." class="pb-chip shrink-0 px-2 py-0.5 rounded-md bg-[#dcfce7] dark:bg-[#122c1a] text-[#16a34a] dark:text-[#4ade80] text-[14px] font-semibold">PB</span>'
                 : '') + '</div>' +
             note +
           '</div>' +
@@ -959,6 +962,7 @@
       var CAL = 'M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4';
       var CLOCK = 'M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v5l3.5 2';
       var PEOPLE = 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6 6 0 0112 0M17.5 11.5a3 3 0 100-6M18 20a5.5 5.5 0 00-2-4.3';
+      var PB_ICON = 'M12 3a5 5 0 015 5c0 3-2 5-2 8H9c0-3-2-5-2-8a5 5 0 015-5zM9 19h6M10 22h4';
 
       // data-type / data-duration let the checks tell a detailed run from a
       // bare one without asserting on text that may not be there.
@@ -966,6 +970,7 @@
         infoRow(PIN, 'Where', run.location, false, true) +
         infoRow(CAL, 'When', whenText, true) +
         (run.duration_minutes ? infoRow(CLOCK, 'Duration', fmtDuration(run.duration_minutes), false) : '') +
+        (run.is_pb ? infoRow(PB_ICON, 'Personal best', 'Fastest so far at this type', false) : '') +
         (run.type_label ? infoRow(TAG, 'Type', run.type_label, false) : '') +
         infoRow(PEOPLE, 'Going', count + (count === 1 ? ' runner' : ' runners'), false) +
       '</div>';
@@ -1491,13 +1496,34 @@
     function openSheet() {
       if (state.sheet) return;
       var contentEl = buildSheet();
-      var handle = unNative.presentSheet({
-        contentEl: contentEl,
-        onDismiss: function () {
-          state.sheet = null;
-          if (location.hash === '#new') setHash('');
-        },
-      });
+      var handle;
+      if (window.unNative && unNative.presentSheet) {
+        handle = unNative.presentSheet({
+          contentEl: contentEl,
+          onDismiss: function () {
+            state.sheet = null;
+            if (location.hash === '#new') setHash('');
+          },
+        });
+      } else {
+        // No kit (standalone or local dev): show the same content as a
+        // plain bottom card so the sheet still opens and closes without
+        // the platform shell.
+        var backdrop = document.createElement('div');
+        backdrop.className = 'fixed inset-0 z-50 bg-[var(--un-backdrop)] flex items-end';
+        var card = document.createElement('div');
+        card.className = 'w-full max-h-screen overflow-y-auto bg-[var(--un-sheet-bg)] rounded-t-3xl p-5';
+        card.appendChild(contentEl);
+        backdrop.appendChild(card);
+        document.body.appendChild(backdrop);
+        handle = {
+          dismiss: function () {
+            if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
+            state.sheet = null;
+            if (location.hash === '#new') setHash('');
+          },
+        };
+      }
       state.sheet = handle;
 
       var where = contentEl.querySelector('#f-where');

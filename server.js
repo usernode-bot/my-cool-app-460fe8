@@ -37,7 +37,10 @@ const PUBLIC_API_PATHS = new Set(['/health']);
 // navigate the app with no token) exercise the real screens instead of an
 // empty error state. Every mutation below still requires `req.user`, so an
 // anonymous reader can look but cannot post, join, leave or cancel.
-const PUBLIC_GET_API = [/^\/api\/runs$/, /^\/api\/runs\/\d+$/];
+const PUBLIC_GET_API = [
+  /^\/api\/runs$/, /^\/api\/runs\/\d+$/,
+  /^\/api\/run-types$/,
+];
 
 // The signed-in user's id, or null when nobody is signed in. Used only by the
 // two public GETs, where "have I joined this run?" is simply false.
@@ -131,43 +134,72 @@ const FUTURE_SLACK_MS = 60 * 1000;
 // everywhere a reminder row is written.
 const REMINDER_LEAD = "interval '1 hour'";
 
+// The board's PB chip reads history the app already stores: one organizer,
+// one run type, planned durations. Past rows are the only events the app
+// records, so the question the window below answers is: of this organizer's
+// finished runs of this type, is this the fastest planned duration so far?
+// CORR names the strict order (soonest wins ties); PB is simply
+// MIN(duration) OVER (organizer, type) on the finished rows.
+const PB_SELECT = `  SELECT q.*,
+         (q.is_past AND q.duration_minutes IS NOT NULL AND
+          q.duration_minutes = MIN(q.duration_minutes) OVER pb_win)::int
+           AS is_pb
+  FROM (
+    SELECT r.*,
+           (r.starts_at < NOW()) AS is_past,
+           ROW_NUMBER() OVER (
+             PARTITION BY r.organizer_id, r.type_label
+             ORDER BY r.starts_at ASC
+           )::int AS corr,
+           MIN(r.starts_at) OVER (
+             PARTITION BY r.organizer_id, r.type_label
+           ) AS first_start
+    FROM runs r
+  ) q
+  WINDOW pb_win AS (
+    PARTITION BY q.organizer_id, q.type_label
+  )
+`;
+
+
 // One row per run, with the three derived fields every list/detail view
 // needs: how many are going, whether the caller is one of them, and the
 // first few names for the avatar cluster.
 const RUN_SELECT = `
-  SELECT r.id, r.location, r.note, r.starts_at,
-         r.organizer_id, r.organizer_username,
-         r.photo_url, r.photo_file_id, r.type_label, r.duration_minutes,
-         r.meeting_point, r.meeting_lat, r.meeting_lng,
-         (SELECT COUNT(*) FROM run_attendees a WHERE a.run_id = r.id)::int
+  SELECT p.id, p.location, p.note, p.starts_at,
+         p.organizer_id, p.organizer_username,
+         p.photo_url, p.photo_file_id, p.type_label, p.duration_minutes,
+         p.meeting_point, p.meeting_lat, p.meeting_lng,
+         p.is_pb,
+         (SELECT COUNT(*) FROM run_attendees a WHERE a.run_id = p.id)::int
            AS attendee_count,
          EXISTS (
            SELECT 1 FROM run_attendees a
-           WHERE a.run_id = r.id AND a.user_id = $1
+           WHERE a.run_id = p.id AND a.user_id = $1
          ) AS joined,
-         (SELECT COUNT(*) FROM run_kudos k WHERE k.run_id = r.id)::int
+         (SELECT COUNT(*) FROM run_kudos k WHERE k.run_id = p.id)::int
            AS kudos_count,
          EXISTS (
            SELECT 1 FROM run_kudos k
-           WHERE k.run_id = r.id AND k.user_id = $1
+           WHERE k.run_id = p.id AND k.user_id = $1
          ) AS kudos_given,
-         (r.organizer_id = $1) AS is_organizer,
+         (p.organizer_id = $1) AS is_organizer,
          COALESCE((
-           SELECT array_agg(p.username ORDER BY p.ord)
+           SELECT array_agg(x.username ORDER BY x.ord)
            FROM (
              SELECT a.username,
                     ROW_NUMBER() OVER (
-                      ORDER BY (a.user_id = r.organizer_id) DESC, a.joined_at
+                      ORDER BY (a.user_id = p.organizer_id) DESC, a.joined_at
                     ) AS ord
-             FROM run_attendees a WHERE a.run_id = r.id
-           ) p
-           WHERE p.ord <= 3
+             FROM run_attendees a WHERE a.run_id = p.id
+           ) x
+           WHERE x.ord <= 3
          ), ARRAY[]::varchar[]) AS preview,
          EXISTS (
            SELECT 1 FROM run_reminder_optouts o
-           WHERE o.run_id = r.id AND o.user_id = $1
+           WHERE o.run_id = p.id AND o.user_id = $1
          ) AS reminders_off
-  FROM runs r
+  FROM (${PB_SELECT}) p
 `;
 
 /* ── Run types API ─────────────────────────────────────────────────────
@@ -207,10 +239,13 @@ function validateTypeLabel(raw, ownerId, excludeId) {
 
 app.get('/api/run-types', async (req, res) => {
   try {
+    // Read-only and anonymous-safe: a signed-out visitor (the platform's
+    // check browser) owns no custom types, so the WHERE on a null caller
+    // simply returns none and the picker falls back to the presets.
     const { rows } = await pool.query(
       `SELECT id, label, created_at FROM run_type_labels
        WHERE owner_id = $1 ORDER BY created_at DESC, id DESC`,
-      [req.user.id]
+      [callerId(req)]
     );
     res.json({ presets: PRESET_TYPES, custom: rows });
   } catch (err) {
@@ -290,8 +325,8 @@ app.get('/api/runs', async (req, res) => {
     const { rows } = await pool.query(
       RUN_SELECT +
         (past
-          ? ` WHERE r.starts_at < NOW() ORDER BY r.starts_at DESC LIMIT 50`
-          : ` WHERE r.starts_at >= NOW() ORDER BY r.starts_at ASC LIMIT 100`),
+          ? ` WHERE p.starts_at < NOW() ORDER BY p.starts_at DESC LIMIT 50`
+          : ` WHERE p.starts_at >= NOW() ORDER BY p.starts_at ASC LIMIT 100`),
       [callerId(req)]
     );
     res.json({ runs: rows });
@@ -424,7 +459,7 @@ app.post('/api/runs', async (req, res) => {
       [id, req.user.id, startsAt.toISOString()]
     );
     await client.query('COMMIT');
-    const full = await pool.query(RUN_SELECT + ' WHERE r.id = $2', [req.user.id, id]);
+    const full = await pool.query(RUN_SELECT + ' WHERE p.id = $2', [req.user.id, id]);
     res.json({ run: full.rows[0] });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -438,7 +473,7 @@ app.get('/api/runs/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad run id' });
   try {
-    const { rows } = await pool.query(RUN_SELECT + ' WHERE r.id = $2', [callerId(req), id]);
+    const { rows } = await pool.query(RUN_SELECT + ' WHERE p.id = $2', [callerId(req), id]);
     if (!rows.length) return res.status(404).json({ error: 'Run not found' });
     // Organizer first, then in the order people joined.
     const attendees = await pool.query(
@@ -909,6 +944,37 @@ async function seedStaging() {
      VALUES (900003, -901), (900003, -902), (900003, -903)
      ON CONFLICT (run_id, user_id) DO NOTHING`
   );
+  // PB chip demo: three finished runs, same organizer and type, with the
+  // durations falling. Only the fastest one (900006) satisfies is_pb, so
+  // the Past tab can show both a PB chip and a non-PB card, and the run
+  // detail can show the PB row next to the Duration row. Same fake demo
+  // identity convention as the runs above; never the visitor.
+  const now = new Date();
+  function pbStartsAt(daysAgo, hour) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - daysAgo);
+    d.setHours(hour, 0, 0, 0);
+    return d.toISOString();
+  }
+  const SEED_PB_RUNS = [
+    { id: 900004, location: 'Staging demo: Greenway Tempo', duration: 35, daysAgo: 9 },
+    { id: 900005, location: 'Staging demo: Greenway Tempo repeat', duration: 31, daysAgo: 5 },
+    { id: 900006, location: 'Staging demo: Greenway Tempo, fastest', duration: 28, daysAgo: 2 },
+  ];
+  for (const run of SEED_PB_RUNS) {
+    await pool.query(
+      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, type_label, duration_minutes)
+       VALUES ($1, $2, $3, $4, -901, 'staging-demo-maya', 'Staging demo: Trail', $5)
+       ON CONFLICT (id) DO UPDATE SET starts_at = EXCLUDED.starts_at,
+         duration_minutes = EXCLUDED.duration_minutes`,
+      [run.id, run.location, null, pbStartsAt(run.daysAgo, 8), run.duration]
+    );
+    await pool.query(
+      `INSERT INTO run_attendees (run_id, user_id, username) VALUES ($1, -901, 'staging-demo-maya')
+       ON CONFLICT DO NOTHING`,
+      [run.id]
+    );
+  }
   // The explicit ids above bypass the sequence; push it past them so the
   // first run a tester posts does not collide with a demo row.
   await pool.query(

@@ -1,7 +1,7 @@
 {
   "name": "Run Club",
   "icon": {
-    "emoji": "🏃"
+    "emoji": "\ud83c\udfc3"
   },
   "secrets": [],
   "tests": [
@@ -157,7 +157,11 @@
       "expectSelector": "#detail-body .staticmap",
       "expectText": "Staging demo: Main gate",
       "visual": true,
-      "impact": ["public/index.html", "styles/**", "server.js"]
+      "impact": [
+        "public/index.html",
+        "styles/**",
+        "server.js"
+      ]
     },
     {
       "id": "home.display-mode",
@@ -222,6 +226,28 @@
       "name": "Past run detail shows the kudos count",
       "path": "/#run/900003",
       "expectText": "3"
+    },
+    {
+      "name": "PB chip renders on the fastest past run",
+      "path": "/#tab-past",
+      "expectSelector": ".run-card .pb-chip"
+    },
+    {
+      "name": "PB chip stays off non-PB cards",
+      "path": "/#tab-past",
+      "expectSelector": "#run-list .run-card:not(:has(.pb-chip))",
+      "expectText": "Staging demo: Old Town loop"
+    },
+    {
+      "name": "PB row renders on run details",
+      "path": "/#run/900006",
+      "expectText": "Fastest so far at this type"
+    },
+    {
+      "name": "Upcoming cards carry no PB chip",
+      "path": "/",
+      "expectSelector": "#run-list .run-card",
+      "expectText": "Staging demo: Riverside Park"
     }
   ],
   "visibility": {
