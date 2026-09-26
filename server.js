@@ -113,6 +113,12 @@ const MAX_PHOTO_FILE_ID = 64;
 // picker, and a label is only valid if BOTH sides know it.
 const PRESET_TYPES = ['Easy', 'Tempo', 'Long Run', 'Intervals', 'Race'];
 const MAX_TYPE_LABEL = 30;
+// The meeting point is optional. The name/description is free text, the
+// coordinates are a resolved pin for the static map thumbnail. Both are
+// stored or neither is, so a run never renders a marker with no words.
+const MAX_MEETING = 120;
+const MAX_MEETING_LAT = 90;
+const MAX_MEETING_LNG = 180;
 // A minute of slack absorbs clock skew between the phone that filled in
 // the picker and this container.
 const FUTURE_SLACK_MS = 60 * 1000;
@@ -128,6 +134,7 @@ const RUN_SELECT = `
   SELECT r.id, r.location, r.note, r.starts_at,
          r.organizer_id, r.organizer_username,
          r.photo_url, r.photo_file_id, r.type_label,
+         r.meeting_point, r.meeting_lat, r.meeting_lng,
          (SELECT COUNT(*) FROM run_attendees a WHERE a.run_id = r.id)::int
            AS attendee_count,
          EXISTS (
@@ -288,6 +295,10 @@ app.post('/api/runs', async (req, res) => {
   const rawNote = String(req.body?.note ?? '').trim();
   const startsAt = new Date(req.body?.starts_at ?? '');
   const rawType = String(req.body?.type ?? '').trim();
+  const rawMeeting = String(req.body?.meeting_point ?? '').trim();
+  const hasCoords = req.body?.meeting_lat != null && req.body?.meeting_lng != null;
+  const meetingLat = hasCoords ? Number(req.body.meeting_lat) : null;
+  const meetingLng = hasCoords ? Number(req.body.meeting_lng) : null;
 
   if (!location) return res.status(400).json({ error: 'Add a location.' });
   if (location.length > MAX_LOCATION) {
@@ -295,6 +306,24 @@ app.post('/api/runs', async (req, res) => {
   }
   if (rawNote.length > MAX_NOTE) {
     return res.status(400).json({ error: 'That note is too long.' });
+  }
+  // The meeting point is optional, but its two halves are not independent:
+  // a name without coordinates loses the map thumbnail, and coordinates
+  // without a name have nothing to label the pin with.
+  if (rawMeeting.length > MAX_MEETING) {
+    return res.status(400).json({ error: 'That meeting point is too long.' });
+  }
+  if (hasCoords && !rawMeeting) {
+    return res.status(400).json({ error: 'Add a name for the meeting point.' });
+  }
+  if (rawMeeting && !hasCoords) {
+    return res.status(400).json({ error: 'Pick a location for the meeting point.' });
+  }
+  if (hasCoords) {
+    if (!Number.isFinite(meetingLat) || meetingLat < -MAX_MEETING_LAT || meetingLat > MAX_MEETING_LAT ||
+        !Number.isFinite(meetingLng) || meetingLng < -MAX_MEETING_LNG || meetingLng > MAX_MEETING_LNG) {
+      return res.status(400).json({ error: 'That meeting-point location is out of range.' });
+    }
   }
   // A run type is optional. When present it must be a preset or one of the
   // caller's own custom types, so the board only ever shows names somebody
@@ -342,8 +371,8 @@ app.post('/api/runs', async (req, res) => {
     // together or not at all.
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id, type_label)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id, type_label, meeting_point, meeting_lat, meeting_lng)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
       [
         location,
         rawNote || null,
@@ -353,6 +382,9 @@ app.post('/api/runs', async (req, res) => {
         photoUrl || null,
         photoFileId || null,
         typeLabel,
+        rawMeeting || null,
+        rawMeeting ? meetingLat : null,
+        rawMeeting ? meetingLng : null,
       ]
     );
     const id = rows[0].id;
@@ -675,6 +707,9 @@ const SEED_RUNS = [
     organizer: [-901, 'staging-demo-maya'],
     joiners: [[-902, 'staging-demo-ethan'], [-903, 'staging-demo-nina']],
     photoUrl: SEED_PHOTO_URL,
+    meeting: 'Staging demo: Main gate, by the fountain',
+    meetingLat: 40.8069,
+    meetingLng: -73.9687,
   },
   {
     id: 900002,
@@ -686,6 +721,9 @@ const SEED_RUNS = [
     minute: 0,
     organizer: [-902, 'staging-demo-ethan'],
     joiners: [[-901, 'staging-demo-maya']],
+    meeting: 'Staging demo: North steps, under the clock',
+    meetingLat: 40.7051,
+    meetingLng: -74.0102,
   },
   {
     id: 900003,
@@ -716,8 +754,8 @@ function seedStartsAt(dayOffset, hour, minute) {
 async function seedStaging() {
   for (const run of SEED_RUNS) {
     await pool.query(
-      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url, type_label)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url, type_label, meeting_point, meeting_lat, meeting_lng)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (id) DO UPDATE SET starts_at = EXCLUDED.starts_at`,
       [
         run.id,
@@ -728,6 +766,9 @@ async function seedStaging() {
         run.organizer[1],
         run.photoUrl || null,
         run.type || null,
+        run.meeting || null,
+        run.meeting ? run.meetingLat : null,
+        run.meeting ? run.meetingLng : null,
       ]
     );
     for (const [userId, username] of [run.organizer, ...run.joiners]) {
@@ -817,7 +858,10 @@ async function migrate() {
   await pool.query(`
     ALTER TABLE runs
       ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500),
-      ADD COLUMN IF NOT EXISTS photo_file_id VARCHAR(64)
+      ADD COLUMN IF NOT EXISTS photo_file_id VARCHAR(64),
+      ADD COLUMN IF NOT EXISTS meeting_point VARCHAR(120),
+      ADD COLUMN IF NOT EXISTS meeting_lat DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS meeting_lng DOUBLE PRECISION
   `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS run_attendees (

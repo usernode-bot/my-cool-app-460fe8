@@ -83,6 +83,26 @@
       "expectSelector": "#detail-photo"
     },
     {
+      "name": "Run detail shows the meeting point",
+      "path": "/#run/900001",
+      "expectSelector": "#detail-body .staticmap",
+      "expectText": "Staging demo: Main gate"
+    },
+    {
+      "name": "New Run sheet shows the Meet at row",
+      "path": "/#new",
+      "expectSelector": "#meeting-row"
+    },
+    {
+      "id": "run.meeting-pin",
+      "name": "Meeting point renders on run details",
+      "path": "/#run/900001",
+      "expectSelector": "#detail-body .staticmap",
+      "expectText": "Staging demo: Main gate",
+      "visual": true,
+      "impact": ["public/index.html", "styles/**", "server.js"]
+    },
+    {
       "id": "home.display-mode",
       "name": "Header carries the display mode icon",
       "path": "/",
