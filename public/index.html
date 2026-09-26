@@ -720,6 +720,19 @@
       };
     }
 
+    // Planned duration in whole minutes, formatted the way the app talks:
+    // under an hour reads in minutes, an hour or more splits into hours
+    // and leftover minutes. Not a clock time, so fmtTime is not involved.
+    function fmtDuration(minutes) {
+      var m = Number(minutes);
+      if (!Number.isFinite(m) || m < 1) return '';
+      m = Math.round(m);
+      if (m < 60) return m + ' min';
+      var h = Math.floor(m / 60);
+      var rest = m % 60;
+      return h + ' h' + (rest ? ' ' + rest + ' min' : '');
+    }
+
     function badgeHtml(info) {
       if (info.tone === 'today') {
         return '<span class="px-2 py-0.5 rounded-md bg-[#d7f5de] dark:bg-[#123a1f] text-[#1b8a3d] dark:text-[#5fdd8a] text-[16px] font-semibold">' + esc(info.label) + '</span>';
@@ -826,6 +839,9 @@
             '<h3 class="text-[19px] font-bold leading-tight truncate">' + esc(run.location) + '</h3>' +
             '<div class="mt-1.5 flex items-center gap-2">' + badgeHtml(info) +
               '<span class="run-time text-[17px] text-[#8e8e93] dark:text-[#98989f]">' + esc(fmtTime(when)) + '</span>' +
+              (run.duration_minutes
+                ? '<span class="min-w-0 truncate text-[17px] text-[#8e8e93] dark:text-[#98989f]">' + esc(fmtDuration(run.duration_minutes)) + '</span>'
+                : '') +
               (run.type_label
                 ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] text-[14px] font-semibold">' + esc(run.type_label) + '</span>'
                 : '') + '</div>' +
@@ -941,13 +957,15 @@
       var PIN = 'M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z';
       var TAG = 'M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01';
       var CAL = 'M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4';
+      var CLOCK = 'M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v5l3.5 2';
       var PEOPLE = 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6 6 0 0112 0M17.5 11.5a3 3 0 100-6M18 20a5.5 5.5 0 00-2-4.3';
 
-      // data-type lets the checks tell a typed detail (1) from a typeless
-      // one (0) without asserting on text that may not be there.
-      var facts = '<div data-type="' + (run.type_label ? '1' : '0') + '" class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
+      // data-type / data-duration let the checks tell a detailed run from a
+      // bare one without asserting on text that may not be there.
+      var facts = '<div data-type="' + (run.type_label ? '1' : '0') + '" data-duration="' + (run.duration_minutes ? '1' : '0') + '" class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
         infoRow(PIN, 'Where', run.location, false, true) +
         infoRow(CAL, 'When', whenText, true) +
+        (run.duration_minutes ? infoRow(CLOCK, 'Duration', fmtDuration(run.duration_minutes), false) : '') +
         (run.type_label ? infoRow(TAG, 'Type', run.type_label, false) : '') +
         infoRow(PEOPLE, 'Going', count + (count === 1 ? ' runner' : ' runners'), false) +
       '</div>';
@@ -1436,6 +1454,11 @@
             '<span id="meeting-status" class="hidden pl-[34px] text-[14px] text-[#8e8e93] dark:text-[#98989f]"></span>' +
             '<span id="meeting-thumb" class="hidden px-0 pt-1"></span>' +
           '</label>' +
+          '<label id="duration-row" class="' + ROW + '">' +
+            '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>' +
+            '<span class="' + LABEL + '">Duration</span>' +
+            '<input id="f-duration" type="number" min="1" max="600" step="1" inputmode="numeric" autocomplete="off" placeholder="Optional: 45" class="' + FIELD + ' text-right">' +
+          '</label>' +
           '<button id="type-row" type="button" aria-label="Type" class="' + ROW + ' w-full text-left">' +
             '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01"/></svg>' +
             '<span class="' + LABEL + '">Type</span>' +
@@ -1479,6 +1502,7 @@
 
       var where = contentEl.querySelector('#f-where');
       var when = contentEl.querySelector('#f-when');
+      var duration = contentEl.querySelector('#f-duration');
       var note = contentEl.querySelector('#f-note');
       var meetingRow = contentEl.querySelector('#meeting-row');
       var meetingInput = contentEl.querySelector('#f-meeting');
@@ -1730,6 +1754,13 @@
         if (post.disabled) return;
         var startsAt = new Date(when.value);
         if (isNaN(startsAt.getTime())) { notify('Pick a date and time.'); return; }
+        // Optional planned duration in whole minutes. Blank means "not
+        // set"; anything else goes to the server as-is and the server
+        // owns validation, so the toast carries its message.
+        var durationMinutes = null;
+        if (duration.value.trim() !== '') {
+          durationMinutes = duration.value.trim();
+        }
         post.disabled = true;
         post.textContent = 'Posting...';
         api('/api/runs', {
@@ -1742,6 +1773,7 @@
             meeting_point: meetingInput.value.trim() || undefined,
             meeting_lat: meetingPin ? meetingPin.lat : undefined,
             meeting_lng: meetingPin ? meetingPin.lng : undefined,
+            duration_minutes: durationMinutes === null ? undefined : durationMinutes,
             photo_url: photo ? photo.url : undefined,
             photo_file_id: photo ? photo.id : undefined,
           }),
@@ -1781,6 +1813,8 @@
         info.label + ' \u00b7 ' + fmtTime(when),
         count + (count === 1 ? ' runner ' : ' runners ') + (isPast ? 'went' : 'going') + ' so far.',
       ];
+      var duration = fmtDuration(run.duration_minutes);
+      if (duration) lines[1] = lines[1] + ' \u00b7 ' + duration;
       lines.push(isPast ? shareUrl : 'Join: ' + shareUrl);
       return lines.join('\n');
     }
