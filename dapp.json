@@ -276,6 +276,44 @@
       "name": "Distanceless run detail keeps its facts unchanged",
       "path": "/#run/900004",
       "expectSelector": "#detail-body [data-distance='0']"
+    },
+    {
+      "name": "New Run sheet shows the training plan picker",
+      "path": "/#new",
+      "expectSelector": "#plan-row"
+    },
+    {
+      "name": "New Run sheet offers the 5K preset",
+      "path": "/#new",
+      "expectSelector": "#plan-5k"
+    },
+    {
+      "name": "5K preset pre-fills the distance field",
+      "path": "/?plan=5k#new",
+      "expectSelector": "#plan-row[data-plan='5k'] #plan-5k[aria-pressed='true']",
+      "expectText": "km a week"
+    },
+    {
+      "name": "Half marathon preset pre-fills 21.1 km",
+      "path": "/?plan=half#new",
+      "expectSelector": "#plan-row[data-plan='half'] #plan-half[aria-pressed='true']",
+      "expectText": "km a week"
+    },
+    {
+      "id": "new-run.plan-picker",
+      "name": "Training plan preset pre-fills the New Run sheet",
+      "path": "/?plan=half#new",
+      "expectSelector": "#plan-row[data-plan='half']",
+      "visual": true,
+      "impact": [
+        "public/**"
+      ]
+    },
+    {
+      "name": "Marathon preset suggests weekly mileage",
+      "path": "/?plan=full#new",
+      "expectSelector": "#plan-row[data-plan='full'] #plan-hint",
+      "expectText": "km a week"
     }
   ],
   "visibility": {
