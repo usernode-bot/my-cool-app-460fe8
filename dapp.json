@@ -21,9 +21,9 @@
       "expectText": "staging-demo-maya"
     },
     {
-      "name": "Time format note is present",
+      "name": "Time format defaults to Auto",
       "path": "/",
-      "expectSelector": "#app #time-format-note"
+      "expectSelector": "#app[data-time-format-mode='auto'] #tf-auto[aria-pressed='true']"
     },
     {
       "name": "12 hour locale renders am/pm times",
@@ -34,6 +34,16 @@
       "name": "24 hour locale renders 24 hour times",
       "path": "/?locale=en-GB",
       "expectSelector": "#app[data-time-format='24'] .run-time"
+    },
+    {
+      "name": "Manual override beats locale",
+      "path": "/?locale=en-US&tf=24",
+      "expectSelector": "#app[data-time-format-mode='24'][data-time-format='24'] .run-time"
+    },
+    {
+      "name": "Run details renders the chosen format",
+      "path": "/?locale=en-GB&tf=12#run/900001",
+      "expectSelector": "#app[data-time-format='12'] #detail-body .run-time"
     },
     {
       "name": "Run detail shows the seeded photo",
