@@ -47,7 +47,8 @@
       "expectSelector": "#when-summary .run-time",
       "visual": true,
       "impact": [
-        "public/**"
+        "public/**",
+        "server.js"
       ]
     },
     {
@@ -108,6 +109,17 @@
       "name": "Run details shows Who's Going",
       "path": "/#run/900001",
       "expectText": "staging-demo-maya"
+    },
+    {
+      "name": "Board search filters by member name",
+      "path": "/?q=staging-demo-sasha",
+      "expectSelector": "#member-search",
+      "expectText": "Staging demo: Riverside Park, main gate"
+    },
+    {
+      "name": "Board search shows a friendly empty state",
+      "path": "/?q=nobody-matches",
+      "expectText": "No runs match"
     },
     {
       "name": "Time format defaults to Auto",
