@@ -16,6 +16,38 @@
       "expectSelector": "#post-run-btn"
     },
     {
+      "name": "New Run sheet shows the Type row",
+      "path": "/#new",
+      "expectSelector": "#type-row"
+    },
+    {
+      "name": "Run type renders on the board",
+      "path": "/",
+      "expectText": "Staging demo: Trail"
+    },
+    {
+      "name": "Run detail shows the Type row",
+      "path": "/#run/900001",
+      "expectSelector": "#detail-body [data-type='1']",
+      "expectText": "Staging demo: Trail"
+    },
+    {
+      "name": "Typeless run detail keeps its facts unchanged",
+      "path": "/#run/900003",
+      "expectSelector": "#detail-body [data-type='0']"
+    },
+    {
+      "id": "new-run.type-row",
+      "name": "New Run sheet carries the Type row",
+      "path": "/#new",
+      "expectSelector": "#type-row",
+      "visual": true,
+      "impact": [
+        "public/**",
+        "server.js"
+      ]
+    },
+    {
       "name": "Run details shows Who's Going",
       "path": "/#run/900001",
       "expectText": "staging-demo-maya"

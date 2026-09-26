@@ -381,9 +381,15 @@
     var headingEl = document.getElementById('list-heading');
     var detailBodyEl = document.getElementById('detail-body');
 
+    // Preset run types. Keep in sync with PRESET_TYPES in server.js: the
+    // server is authoritative for validation, this list drives the picker,
+    // and a label is only valid if BOTH sides know it.
+    var PRESET_TYPES = ['Easy', 'Tempo', 'Long Run', 'Intervals', 'Race'];
+
     var state = {
       tab: 'upcoming',
       runs: [],
+      customTypes: [],   // the signed-in member's own types, from /api/run-types
       detail: null,      // { run, attendees }
       screen: 'home',
       sheet: null,
@@ -419,6 +425,20 @@
 
     function notify(message) {
       if (window.unNative && unNative.toast) unNative.toast(message);
+    }
+
+    /* ── Run types ────────────────────────────────────────────────── */
+
+    // The signed-in member's own custom types, fetched once at boot and
+    // refreshed after every add, rename or delete. A failure is swallowed:
+    // the picker falls back to the presets and the sheet still works, so a
+    // hiccup on this endpoint can never block posting a run.
+    function loadRunTypes() {
+      return api('/api/run-types').then(function (data) {
+        state.customTypes = data.custom || [];
+      }).catch(function () {
+        state.customTypes = [];
+      });
     }
 
     /* ── Run photo upload ─────────────────────────────────────────── */
@@ -716,7 +736,10 @@
           '<div class="min-w-0 flex-1">' +
             '<h3 class="text-[19px] font-bold leading-tight truncate">' + esc(run.location) + '</h3>' +
             '<div class="mt-1.5 flex items-center gap-2">' + badgeHtml(info) +
-              '<span class="run-time text-[17px] text-[#8e8e93] dark:text-[#98989f]">' + esc(fmtTime(when)) + '</span></div>' +
+              '<span class="run-time text-[17px] text-[#8e8e93] dark:text-[#98989f]">' + esc(fmtTime(when)) + '</span>' +
+              (run.type_label
+                ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] text-[14px] font-semibold">' + esc(run.type_label) + '</span>'
+                : '') + '</div>' +
             note +
           '</div>' +
         '</div>' +
@@ -813,12 +836,16 @@
       }
 
       var PIN = 'M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z';
+      var TAG = 'M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01';
       var CAL = 'M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4';
       var PEOPLE = 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6 6 0 0112 0M17.5 11.5a3 3 0 100-6M18 20a5.5 5.5 0 00-2-4.3';
 
-      var facts = '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
+      // data-type lets the checks tell a typed detail (1) from a typeless
+      // one (0) without asserting on text that may not be there.
+      var facts = '<div data-type="' + (run.type_label ? '1' : '0') + '" class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
         infoRow(PIN, 'Where', run.location, false, true) +
         infoRow(CAL, 'When', whenText, true) +
+        (run.type_label ? infoRow(TAG, 'Type', run.type_label, false) : '') +
         infoRow(PEOPLE, 'Going', count + (count === 1 ? ' runner' : ' runners'), false) +
       '</div>';
 
@@ -1087,6 +1114,11 @@
             '<span class="' + LABEL + '">When</span>' +
             '<input id="f-when" type="datetime-local" required aria-label="Date and time" class="' + FIELD + ' text-right">' +
           '</div>' +
+          '<button id="type-row" type="button" aria-label="Type" class="' + ROW + ' w-full text-left">' +
+            '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01"/></svg>' +
+            '<span class="' + LABEL + '">Type</span>' +
+            '<span id="type-value" class="min-w-0 flex-1 text-right text-[17px] text-[#b6b6bd] dark:text-[#6f6f78]">Optional</span>' +
+          '</button>' +
           '<label class="' + ROW + '">' +
             '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5zM14 3v5h5"/></svg>' +
             '<span class="' + LABEL + '">Note</span>' +
@@ -1127,6 +1159,122 @@
       var when = contentEl.querySelector('#f-when');
       var note = contentEl.querySelector('#f-note');
       var post = contentEl.querySelector('#post-run-btn');
+      var typeRow = contentEl.querySelector('#type-row');
+      var typeValueEl = contentEl.querySelector('#type-value');
+      var typeValue = '';
+
+      // The chosen label. Empty means "no type", which stays valid: the
+      // server stores NULL and every existing screen renders unchanged.
+      function setTypeValue(v) {
+        typeValue = v || '';
+        if (typeValue) {
+          typeValueEl.textContent = typeValue;
+          typeValueEl.className = 'min-w-0 flex-1 text-right text-[17px] text-[#0a7aff] dark:text-[#5aa9ff] font-medium';
+        } else {
+          typeValueEl.textContent = 'Optional';
+          typeValueEl.className = 'min-w-0 flex-1 text-right text-[17px] text-[#b6b6bd] dark:text-[#6f6f78]';
+        }
+      }
+
+      // One shared save path for Add and Rename: the alert's field carries
+      // the value, the server owns validation, and the message it sends
+      // back is what the toast shows. Keeps the picker honest about
+      // preset-name collisions (case-insensitive) without duplicating rules.
+      function saveType(url, method, currentValue, onSaved) {
+        return unNative.alert({
+          title: method === 'POST' ? 'Add type' : 'Rename type',
+          field: { placeholder: 'e.g. Trail', value: currentValue || '' },
+          buttons: [
+            { label: 'Save', style: 'default' },
+            { label: 'Cancel', style: 'cancel' },
+          ],
+        }).then(function (res) {
+          var label = res && res.value ? String(res.value).trim() : '';
+          if (!res || res.button.style === 'cancel' || !label) return;
+          api(url, { method: method, body: JSON.stringify({ label: label }) })
+            .then(function (data) {
+              return loadRunTypes().then(function () {
+                if (onSaved) onSaved(data.type);
+              });
+            })
+            .catch(function (err) { notify(err.message); });
+        }).catch(function () { /* dismissed */ });
+      }
+
+      function pickType(id) {
+        var own = state.customTypes.filter(function (t) { return t.id === id; })[0];
+        if (!own) return;
+        unNative.menu({
+          anchorEl: typeRow,
+          title: own.label,
+          items: [
+            { label: 'Use', value: 'use' },
+            { label: 'Rename', value: 'rename' },
+            { label: 'Delete', destructive: true, value: 'delete' },
+          ],
+          cancelLabel: 'Cancel',
+        }).then(function (choice) {
+          if (!choice) return;
+          if (choice.value === 'use') {
+            setTypeValue(own.label);
+            return;
+          }
+          if (choice.value === 'rename') {
+            saveType('/api/run-types/' + own.id, 'PATCH', own.label, function (t) {
+              if (typeValue === own.label && t) setTypeValue(t.label);
+            });
+            return;
+          }
+          unNative.alert({
+            title: 'Delete this type?',
+            message: 'Runs already posted with it keep the name.',
+            buttons: [
+              { label: 'Keep it', style: 'cancel' },
+              { label: 'Delete', style: 'destructive' },
+            ],
+          }).then(function (res) {
+            if (!res || !res.button || res.button.style !== 'destructive') return;
+            api('/api/run-types/' + own.id, { method: 'DELETE' })
+              .then(function () {
+                if (typeValue === own.label) setTypeValue('');
+                return loadRunTypes();
+              })
+              .catch(function (err) { notify(err.message); });
+          }).catch(function () { /* dismissed */ });
+        }).catch(function () { /* dismissed */ });
+      }
+
+      function openTypePicker() {
+        if (!(window.unNative && unNative.menu)) return;
+        var items = PRESET_TYPES.map(function (name) {
+          return { label: name + (typeValue === name ? '  ✓' : ''), value: 'pick|' + name };
+        });
+        state.customTypes.forEach(function (t) {
+          items.push({ label: t.label + (typeValue === t.label ? '  ✓' : ''), value: 'own|' + t.id });
+        });
+        items.push({ label: 'Add type', value: 'add' });
+        unNative.menu({
+          anchorEl: typeRow,
+          title: 'Type',
+          items: items,
+          cancelLabel: 'Cancel',
+        }).then(function (choice) {
+          if (!choice) return;
+          if (choice.value === 'add') {
+            saveType('/api/run-types', 'POST', '', function (t) {
+              if (t) setTypeValue(t.label);
+            });
+            return;
+          }
+          if (choice.value.slice(0, 4) === 'own|') {
+            pickType(parseInt(choice.value.slice(4), 10));
+            return;
+          }
+          setTypeValue(choice.value.slice(5));
+        }).catch(function () { /* dismissed */ });
+      }
+
+      typeRow.addEventListener('click', openTypePicker);
 
       var photoRow = contentEl.querySelector('#photo-row');
       var photoAddBtn = contentEl.querySelector('#photo-add-btn');
@@ -1206,6 +1354,7 @@
             location: where.value.trim(),
             note: note.value.trim(),
             starts_at: startsAt.toISOString(),
+            type: typeValue,
             photo_url: photo ? photo.url : undefined,
             photo_file_id: photo ? photo.id : undefined,
           }),
@@ -1473,6 +1622,7 @@
     renderTheme();
     renderTimeFormat();
     renderTabs();
+    loadRunTypes();
     loadRuns().then(route);
 
     if (window.unNative && unNative.attachPullToRefresh) {
