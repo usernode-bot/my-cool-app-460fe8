@@ -325,6 +325,13 @@
           class="rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">Past</button>
       </div>
 
+      <label for="member-search" class="sr-only">Search runs by member name</label>
+      <input id="member-search" type="search" placeholder="Search by member name"
+        autocomplete="off" class="mt-3 w-full px-4 py-2.5 text-[17px] rounded-[14px]
+        bg-white dark:bg-[#1c1c20] text-[#111114] dark:text-white
+        placeholder:text-[#8e8e93] dark:placeholder:text-[#98989f]
+        shadow-[0_1px_3px_rgba(0,0,0,0.08)] outline-none focus:ring-2 focus:ring-[#0a7aff]/40" />
+
       <div class="mt-6 mb-3 px-1 flex items-center justify-between gap-3">
         <h2 id="list-heading" class="text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93] dark:text-[#98989f]">UPCOMING RUNS</h2>
         <div id="time-format" role="group" aria-label="Time format"
@@ -470,6 +477,9 @@
 
     var state = {
       tab: 'upcoming',
+      // Deep-linkable board search: ?q= seeds the box for one load, the
+      // same way ?tf= seeds the format switch. Never persisted.
+      q: (params.get('q') || '').trim(),
       runs: [],
       customTypes: [],   // the signed-in member's own types, from /api/run-types
       detail: null,      // { run, attendees }
@@ -916,7 +926,9 @@
         : state.runs;
       if (!state.runs.length) {
         listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">' +
-          (state.tab === 'past'
+          (state.q
+            ? 'No runs match "' + esc(state.q) + '". Try another name.'
+            : state.tab === 'past'
             ? 'No past runs yet.'
             : 'No upcoming runs. Tap + to post one.') + '</p>';
         return;
@@ -940,7 +952,9 @@
     }
 
     function loadRuns() {
-      return api('/api/runs?filter=' + state.tab).then(function (data) {
+      var qs = 'filter=' + state.tab +
+        (state.q ? '&q=' + encodeURIComponent(state.q) : '');
+      return api('/api/runs?' + qs).then(function (data) {
         state.runs = data.runs || [];
         renderList();
       }).catch(function (err) {
@@ -2104,6 +2118,25 @@
       });
     });
 
+    /* ── Board search ──────────────────────────────────────────────── */
+
+    // Typed, not per keystroke: 250ms of quiet before the list re-asks
+    // the server with the trimmed query.
+    var searchTimer = null;
+    var searchInput = document.getElementById('member-search');
+    searchInput.value = state.q;
+
+    searchInput.addEventListener('input', function () {
+      var next = searchInput.value.trim();
+      if (next === state.q) return;
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(function () {
+        searchTimer = null;
+        state.q = next;
+        loadRuns();
+      }, 250);
+    });
+
     // Distance chips are multi-select: each tap adds or removes one chip,
     // and no chip active shows every run. Toggling never refetches, it
     // only narrows what is already on the board.
@@ -2115,7 +2148,6 @@
         renderDistFilter();
         renderList();
       });
-    });
 
     /* ── Routing: #new and #run/<id> are the deep links ────────────── */
 

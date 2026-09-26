@@ -290,13 +290,28 @@ app.delete('/api/run-types/:id', async (req, res) => {
 // yet, soonest first. `past` reads the other way and is capped.
 app.get('/api/runs', async (req, res) => {
   const past = req.query.filter === 'past';
+  const q = String(req.query.q || '').trim();
+  // Board search: a run matches when the query names its organizer or any
+  // member going to it. COALESCE($2, '') = '' short-circuits to TRUE when
+  // no query came in, so an unfiltered board is not emptied by the clause.
+  // ILIKE metacharacters are escaped so "%", "_" and "\" in a name match
+  // literally rather than acting as wildcards.
+  const like = q ? '%' + q.replace(/[\\%_]/g, '\\$&') + '%' : '';
+  const params = [callerId(req), like];
+  const memberMatch = `
+    EXISTS (
+      SELECT 1 FROM run_attendees m
+      WHERE m.run_id = r.id
+        AND (r.organizer_username ILIKE $2 OR m.username ILIKE $2))`;
   try {
     const { rows } = await pool.query(
       RUN_SELECT +
         (past
-          ? ` WHERE r.starts_at < NOW() ORDER BY r.starts_at DESC LIMIT 50`
-          : ` WHERE r.starts_at >= NOW() ORDER BY r.starts_at ASC LIMIT 100`),
-      [callerId(req)]
+          ? ` WHERE r.starts_at < NOW() AND (COALESCE($2, '') = '' OR ` + memberMatch + `)` +
+            ` ORDER BY r.starts_at DESC LIMIT 50`
+          : ` WHERE r.starts_at >= NOW() AND (COALESCE($2, '') = '' OR ` + memberMatch + `)` +
+            ` ORDER BY r.starts_at ASC LIMIT 100`),
+      params
     );
     res.json({ runs: rows });
   } catch (err) {
@@ -793,7 +808,9 @@ const SEED_RUNS = [
     hour: 18,
     minute: 30,
     organizer: [-901, 'staging-demo-maya'],
-    joiners: [[-902, 'staging-demo-ethan'], [-903, 'staging-demo-nina']],
+    // Sasha is a member here only, so a board search for her name filters
+    // the list to this run and can demonstrate the no-match empty state.
+    joiners: [[-904, 'staging-demo-sasha'], [-902, 'staging-demo-ethan'], [-903, 'staging-demo-nina']],
     photoUrl: SEED_PHOTO_URL,
     meeting: 'Staging demo: Main gate, by the fountain',
     meetingLat: 40.8069,
