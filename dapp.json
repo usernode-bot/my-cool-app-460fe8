@@ -21,6 +21,31 @@
       "expectSelector": "#type-row"
     },
     {
+      "name": "New Run sheet offers day picks",
+      "path": "/#new",
+      "expectSelector": "#when-days [data-day='today']"
+    },
+    {
+      "name": "New Run sheet offers start times",
+      "path": "/#new",
+      "expectSelector": "#when-times [data-time='07:00']"
+    },
+    {
+      "name": "New Run summary follows a 24 hour locale",
+      "path": "/?locale=en-GB#new",
+      "expectSelector": "#when-picks[data-time-format='24'] #when-summary .run-time"
+    },
+    {
+      "id": "new-run.when-picks",
+      "name": "New Run sheet shows quick date and time picks",
+      "path": "/#new",
+      "expectSelector": "#when-summary .run-time",
+      "visual": true,
+      "impact": [
+        "public/**"
+      ]
+    },
+    {
       "name": "Run type renders on the board",
       "path": "/",
       "expectText": "Staging demo: Trail"
@@ -140,7 +165,31 @@
       "path": "/#run/900001",
       "expectSelector": "#more-btn[aria-label*='reminders']",
       "visual": true,
-      "impact": ["public/index.html", "server.js"]
+      "impact": [
+        "public/index.html",
+        "server.js"
+      ]
+    },
+    {
+      "id": "kudos.past-run",
+      "name": "Past run shows Kudos count",
+      "path": "/#tab-past",
+      "expectSelector": "#screen-home .kudos-btn",
+      "visual": true,
+      "impact": [
+        "public/index.html",
+        "server.js"
+      ]
+    },
+    {
+      "name": "Past run detail shows Kudos button",
+      "path": "/#run/900003",
+      "expectSelector": "#kudos-btn"
+    },
+    {
+      "name": "Past run detail shows the kudos count",
+      "path": "/#run/900003",
+      "expectText": "3"
     }
   ],
   "visibility": {
