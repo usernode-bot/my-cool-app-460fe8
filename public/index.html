@@ -353,7 +353,7 @@
         <button id="theme-btn-detail" type="button" class="theme-btn un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center"
           aria-label="Display mode" title="Display mode"></button>
         <button id="more-btn" type="button"
-          aria-label="More options. Contains: Share and cancel or leave"
+          aria-label="More options. Contains: Share, reminders, and cancel or leave"
           class="un-touch-target w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
             <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
@@ -1304,10 +1304,19 @@
       if (!state.detail) return;
       var run = state.detail.run;
       var isPast = new Date(run.starts_at).getTime() < Date.now();
-      var items = [];
+    var items = [];
       // Share first: it is relevant to every viewer, while the entries
       // below it only exist in some states.
       items.push({ label: 'Share', value: 'share' });
+      // Reminder toggle: only for attendees of a run that has not
+      // started, so the menu stays exactly as short as it is today for
+      // everyone else. The label is the action the tap performs.
+      if (!isPast && run.joined) {
+        items.push({
+          label: run.reminders_off ? 'Reminders on' : 'Reminders off',
+          value: 'reminders',
+        });
+      }
       if (!isPast && run.is_organizer) {
         items.push({ label: 'Cancel run', destructive: true, value: 'cancel', icon: 'trash' });
       } else if (!isPast && run.joined) {
@@ -1322,6 +1331,18 @@
           if (choice.value === 'timeformat') {
             openTimeFormatMenu(e.currentTarget);
             return;
+          }
+          if (choice.value === 'reminders') {
+            var wantOn = run.reminders_off;
+            return api('/api/runs/' + run.id + '/reminders', {
+              method: 'PUT',
+              body: JSON.stringify({ enabled: wantOn }),
+            }).then(function (data) {
+              if (state.detail && state.detail.run.id === run.id) {
+                state.detail.run.reminders_off = data.reminders_off;
+              }
+              notify(wantOn ? 'Reminders on.' : 'Reminders off.');
+            });
           }
           if (choice.value === 'share') {
             var message = shareTextFor(run);
@@ -1461,6 +1482,59 @@
           : loadRuns();
       }, { content: document.getElementById('app') });
     }
+
+    /* ── Run reminders ─────────────────────────────────────────────── */
+
+    // One reminder per run, claimed server-side: the poll reads what is
+    // due, toasts it, then marks exactly those run ids sent. A second
+    // tab (or device) polling the same reminder finds sent_at already
+    // set, so the toast can never fire twice.
+    var reminderTimer = null;
+
+    function pollReminders() {
+      api('/api/reminders/due')
+        .then(function (data) {
+          var due = data.reminders || [];
+          due.forEach(function (r) {
+            notify('Your run starts in 1 hour.');
+          });
+          if (due.length) {
+            return api('/api/reminders/due/claim', {
+              method: 'POST',
+              body: JSON.stringify({
+                run_ids: due.map(function (r) { return r.run_id; }),
+              }),
+            });
+          }
+        })
+        .catch(function (err) {
+          // A signed-out or stale-token view (the checker's browser, an
+          // expired session) cannot poll reminders; the 401 is expected
+          // there, so idle quietly rather than log a console error.
+        });
+    }
+
+    function startReminders() {
+      // A signed-out view (the checker's browser, an expired session)
+      // has no token to poll with, so don't even ask: the endpoint is
+      // auth-gated and a 401 would be a console error on every load.
+      if (reminderTimer || !token) return;
+      pollReminders();
+      reminderTimer = setInterval(pollReminders, 60 * 1000);
+    }
+
+    function stopReminders() {
+      if (reminderTimer) { clearInterval(reminderTimer); reminderTimer = null; }
+    }
+
+    // The shell keeps hidden apps loaded but invisible: stop the poll
+    // while nobody is looking, catch up immediately on show.
+    window.addEventListener('usernode:visibility-changed', function (e) {
+      if (e && e.detail && e.detail.hidden) stopReminders();
+      else startReminders();
+    });
+
+    startReminders();
   })();
   </script>
 </body>
