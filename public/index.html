@@ -352,7 +352,8 @@
         <div class="shrink-0 flex items-center gap-2">
         <button id="theme-btn-detail" type="button" class="theme-btn un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center"
           aria-label="Display mode" title="Display mode"></button>
-        <button id="more-btn" type="button" aria-label="More options"
+        <button id="more-btn" type="button"
+          aria-label="More options. Contains: Share and cancel or leave"
           class="un-touch-target w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
             <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
@@ -1227,6 +1228,27 @@
 
     /* ── Actions ───────────────────────────────────────────────────── */
 
+    // The shared message is the detail screen's own summary plus a tokenless
+    // deep link: origin + pathname drops the ?token= query, and the server's
+    // catch-all already lands a tokenless visitor on #run/<id> via the
+    // platform's chromeless view. Worded with the words the screen already
+    // uses ("runners going" / "went", badge + fmtTime).
+    function shareTextFor(run) {
+      var when = new Date(run.starts_at);
+      var info = dayInfo(when);
+      var isPast = when.getTime() < Date.now();
+      var count = run.attendee_count || 0;
+      var where = (run.note ? run.note + ' \u00b7 ' : '') + run.location;
+      var shareUrl = location.origin + location.pathname + '#run/' + run.id;
+      var lines = [
+        where,
+        info.label + ' \u00b7 ' + fmtTime(when),
+        count + (count === 1 ? ' runner ' : ' runners ') + (isPast ? 'went' : 'going') + ' so far.',
+      ];
+      lines.push(isPast ? shareUrl : 'Join: ' + shareUrl);
+      return lines.join('\n');
+    }
+
     function joinRun(id) {
       return api('/api/runs/' + id + '/join', { method: 'POST' });
     }
@@ -1283,6 +1305,9 @@
       var run = state.detail.run;
       var isPast = new Date(run.starts_at).getTime() < Date.now();
       var items = [];
+      // Share first: it is relevant to every viewer, while the entries
+      // below it only exist in some states.
+      items.push({ label: 'Share', value: 'share' });
       if (!isPast && run.is_organizer) {
         items.push({ label: 'Cancel run', destructive: true, value: 'cancel', icon: 'trash' });
       } else if (!isPast && run.joined) {
@@ -1296,6 +1321,19 @@
           if (!choice) return;
           if (choice.value === 'timeformat') {
             openTimeFormatMenu(e.currentTarget);
+            return;
+          }
+          if (choice.value === 'share') {
+            var message = shareTextFor(run);
+            if (navigator.share) {
+              navigator.share({ text: message }).catch(function () { /* dismissed */ });
+            } else if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(message)
+                .then(function () { notify('Run link copied.'); })
+                .catch(function () { notify('Could not share this run.'); });
+            } else {
+              notify('Sharing is not available here.');
+            }
             return;
           }
           if (choice.value === 'leave') {
@@ -1336,11 +1374,6 @@
 
     document.getElementById('back-btn').addEventListener('click', function () {
       setHash('');
-    });
-
-    document.getElementById('time-format').addEventListener('click', function (e) {
-      var btn = e.target.closest('button[data-format]');
-      if (btn) setFormat(btn.dataset.format);
     });
 
     [['tab-upcoming', 'upcoming'], ['tab-past', 'past']].forEach(function (pair) {

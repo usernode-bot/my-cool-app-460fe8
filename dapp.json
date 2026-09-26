@@ -71,6 +71,11 @@
       "name": "Run details renders in dark mode",
       "path": "/?theme=dark#run/900001",
       "expectSelector": "html.dark #screen-detail:not(.hidden) #theme-btn-detail[data-theme-mode='dark'][aria-label='Display mode: Dark']"
+    },
+    {
+      "name": "Run details menu offers Share",
+      "path": "/#run/900001",
+      "expectSelector": "#more-btn[aria-label*='Share']"
     }
   ],
   "visibility": {

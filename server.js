@@ -319,6 +319,35 @@ app.use(express.static(path.join(__dirname, 'public')));
 // without Sec-Fetch-*) gets the "open in Usernode" landing page instead
 // of a redirect, so the platform shell is never loaded INSIDE its own
 // app iframe and stray visits still don't reveal the app.
+//
+// Before it: the compiled stylesheet (public/tailwind.css) and the hosted
+// bridge / native kit paths. The stylesheet only exists inside the image,
+// and platform convention requires the canonical files at /usernode-* to
+// come from the platform, not a per-app fork. Registered here so the
+// catch-all below cannot swallow them. (Locally PLATFORM_ORIGIN is empty,
+// so a redirect lands on the app's own origin and 401s there; that is
+// fine — this path only exists for the in-loop check browser.)
+app.get('/tailwind.css', (req, res) =>
+  res.sendFile(path.join(__dirname, 'public', 'tailwind.css')));
+['native.css', 'native.js', 'bridge.js'].forEach((file) => {
+  const subPath = file === 'bridge.js'
+    ? '/usernode-bridge/v1/bridge.js'
+    : '/usernode-native/v1/' + file;
+  if (PLATFORM_ORIGIN) {
+    // In the platform the canonical files ship from the platform edge on
+    // the app's own origin already, so this handler never even runs; but
+    // if the edge is ever bypassed, redirect rather than proxy: this app
+    // has no way to fetch the canonical copy itself.
+    app.get(subPath, (req, res) => res.redirect(302, PLATFORM_ORIGIN + subPath));
+  } else {
+    // Outside the platform (local runs, in-loop checks) there is nothing
+    // to redirect to. A no-op stub keeps the page from logging console
+    // errors; everything the stub would be used for is either gated on
+    // the bridge existing or degrades on its own below.
+    app.get(subPath, (req, res) => res.type('js').send('/* hosted file not available outside the platform */'));
+  }
+});
+
 app.get('*', (req, res) => {
   if (!req.user) {
     // Deep-link pass-through (platform #743): carry the visited
@@ -342,6 +371,12 @@ app.get('*', (req, res) => {
   </div>
 </body>`);
   }
+  // The verified JWT carries the user's platform locale (a BCP-47 tag, or
+  // null when they have not set one). The frontend derives the clock
+  // format from the locale (12 hour vs 24 hour), so pass the claim down
+  // here: the very first paint already renders in the right shape, before
+  // any bridge round-trip. null falls through to device detection in the
+  // app script, which is the correct behaviour per platform conventions.
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
