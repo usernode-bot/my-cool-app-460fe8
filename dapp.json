@@ -108,6 +108,19 @@
       "name": "Run details menu offers Share",
       "path": "/#run/900001",
       "expectSelector": "#more-btn[aria-label*='Share']"
+    },
+    {
+      "name": "Run details menu offers reminders",
+      "path": "/#run/900001",
+      "expectSelector": "#more-btn[aria-label*='reminders']"
+    },
+    {
+      "id": "reminders.toggle",
+      "name": "Reminder toggle reachable on run details",
+      "path": "/#run/900001",
+      "expectSelector": "#more-btn[aria-label*='reminders']",
+      "visual": true,
+      "impact": ["public/index.html", "server.js"]
     }
   ],
   "visibility": {

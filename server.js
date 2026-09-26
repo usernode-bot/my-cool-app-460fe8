@@ -117,6 +117,10 @@ const MAX_TYPE_LABEL = 30;
 // the picker and this container.
 const FUTURE_SLACK_MS = 60 * 1000;
 
+// Reminders fire this long before the run's start time. One value, used
+// everywhere a reminder row is written.
+const REMINDER_LEAD = "interval '1 hour'";
+
 // One row per run, with the three derived fields every list/detail view
 // needs: how many are going, whether the caller is one of them, and the
 // first few names for the avatar cluster.
@@ -141,7 +145,11 @@ const RUN_SELECT = `
              FROM run_attendees a WHERE a.run_id = r.id
            ) p
            WHERE p.ord <= 3
-         ), ARRAY[]::varchar[]) AS preview
+         ), ARRAY[]::varchar[]) AS preview,
+         EXISTS (
+           SELECT 1 FROM run_reminder_optouts o
+           WHERE o.run_id = r.id AND o.user_id = $1
+         ) AS reminders_off
   FROM runs r
 `;
 
@@ -353,6 +361,13 @@ app.post('/api/runs', async (req, res) => {
        ON CONFLICT DO NOTHING`,
       [id, req.user.id, req.user.username]
     );
+    // The organizer is an attendee, so they get a reminder too. One row
+    // per (run, attendee), written while the run itself is written.
+    await client.query(
+      `INSERT INTO run_reminders (run_id, user_id, remind_at)
+       VALUES ($1, $2, $3::timestamptz - ${REMINDER_LEAD})`,
+      [id, req.user.id, startsAt.toISOString()]
+    );
     await client.query('COMMIT');
     const full = await pool.query(RUN_SELECT + ' WHERE r.id = $2', [req.user.id, id]);
     res.json({ run: full.rows[0] });
@@ -408,6 +423,19 @@ app.post('/api/runs/:id/join', async (req, res) => {
        ON CONFLICT DO NOTHING`,
       [id, req.user.id, req.user.username]
     );
+    // Re-joining after a leave starts fresh with reminders on, so clear
+    // any opt-out left behind and schedule the reminder from the run's
+    // own start time.
+    await pool.query(
+      `INSERT INTO run_reminders (run_id, user_id, remind_at)
+       VALUES ($1, $2, (SELECT starts_at FROM runs WHERE id = $1) - ${REMINDER_LEAD})
+       ON CONFLICT (run_id, user_id) DO NOTHING`,
+      [id, req.user.id]
+    );
+    await pool.query(
+      `DELETE FROM run_reminder_optouts WHERE run_id = $1 AND user_id = $2`,
+      [id, req.user.id]
+    );
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -427,6 +455,16 @@ app.post('/api/runs/:id/leave', async (req, res) => {
       id,
       req.user.id,
     ]);
+    // Attendance carried the reminder schedule and the opt-out; leaving
+    // drops both so a re-join starts clean.
+    await pool.query(
+      `DELETE FROM run_reminders WHERE run_id = $1 AND user_id = $2`,
+      [id, req.user.id]
+    );
+    await pool.query(
+      `DELETE FROM run_reminder_optouts WHERE run_id = $1 AND user_id = $2`,
+      [id, req.user.id]
+    );
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -445,6 +483,101 @@ app.delete('/api/runs/:id', async (req, res) => {
     }
     await pool.query(`DELETE FROM runs WHERE id = $1`, [id]);
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── Reminders API ───────────────────────────────────────────────────
+ * One row per (run, attendee) in run_reminders; sent_at is the dedup
+ * key. The frontend polls /due, toasts what it gets back, then claims
+ * exactly the run ids it showed; the claim's atomic UPDATE is what
+ * keeps a reminder from ever firing twice across tabs or devices.
+ * ──────────────────────────────────────────────────────────────────── */
+
+app.get('/api/reminders/due', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT rm.run_id, r.location, r.starts_at,
+              EXISTS (
+                SELECT 1 FROM run_reminder_optouts o
+                WHERE o.run_id = rm.run_id AND o.user_id = $1
+              ) AS reminders_off
+       FROM run_reminders rm
+       JOIN runs r ON r.id = rm.run_id
+       WHERE rm.user_id = $1
+         AND rm.sent_at IS NULL
+         AND rm.remind_at <= NOW()
+         AND r.starts_at > NOW()
+       ORDER BY r.starts_at ASC`,
+      [req.user.id]
+    );
+    res.json({ reminders: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Marks the named reminders sent with one atomic UPDATE per row. Only a
+// transition from sent_at IS NULL counts, so two tabs claiming the same
+// run_id produce one fire and one no-op, never two toasts.
+app.post('/api/reminders/due/claim', async (req, res) => {
+  const ids = Array.isArray(req.body?.run_ids)
+    ? [...new Set(req.body.run_ids.map(Number).filter(Number.isInteger))]
+    : [];
+  if (!ids.length) return res.json({ claimed: [] });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE run_reminders SET sent_at = NOW()
+       WHERE user_id = $1 AND run_id = ANY($2::int[]) AND sent_at IS NULL
+       RETURNING run_id`,
+      [req.user.id, ids]
+    );
+    res.json({ claimed: rows.map((r) => r.run_id) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Per-run reminder opt-out. Guarded like join/leave so the run must
+// still exist and not have started for the choice to mean anything.
+app.put('/api/runs/:id/reminders', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad run id' });
+  const enabled = req.body?.enabled;
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'Tell us whether reminders are on or off.' });
+  }
+  try {
+    const guard = await loadJoinableRun(id);
+    if (guard.error) return res.status(guard.error).json({ error: guard.message });
+    if (enabled) {
+      await pool.query(
+        `DELETE FROM run_reminder_optouts WHERE run_id = $1 AND user_id = $2`,
+        [id, req.user.id]
+      );
+    } else {
+      // Toggling off also unschedules any reminder that has not fired
+      // yet, so a run the person has silenced can never toast later.
+      await pool.query(
+        `INSERT INTO run_reminder_optouts (run_id, user_id) VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [id, req.user.id]
+      );
+      await pool.query(
+        `DELETE FROM run_reminders
+         WHERE run_id = $1 AND user_id = $2 AND sent_at IS NULL`,
+        [id, req.user.id]
+      );
+    }
+    const state = await pool.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM run_reminder_optouts o
+         WHERE o.run_id = $1 AND o.user_id = $2
+       ) AS reminders_off`,
+      [id, req.user.id]
+    );
+    res.json({ reminders_off: state.rows[0].reminders_off });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -626,6 +759,34 @@ async function seedStaging() {
     `SELECT setval(pg_get_serial_sequence('run_type_labels', 'id'),
                    GREATEST((SELECT COALESCE(MAX(id), 1) FROM run_type_labels), 1))`
   );
+  // Private tables arrive empty in staging (schema only), so seed the
+  // reminder and opt-out state the testing steps need. All ids are the
+  // same fake demo identities the runs above use, never the visitor.
+  // Riverside (900001) starts ~18:30 local today: place Maya's reminder
+  // just inside the due window so a tester opening the app sees the
+  // toast within a minute or two.
+  await pool.query(
+    `INSERT INTO run_reminders (run_id, user_id, remind_at)
+     VALUES (900001, -901, NOW() + INTERVAL '30 seconds')
+     ON CONFLICT (run_id, user_id) DO NOTHING`
+  );
+  // Harbor Promenade (900002) is tomorrow morning: Ethan gets a real
+  // future reminder row, which is what the "already scheduled" state
+  // looks like in production.
+  await pool.query(
+    `INSERT INTO run_reminders (run_id, user_id, remind_at)
+     VALUES (900002, -902,
+             (SELECT starts_at FROM runs WHERE id = 900002) - INTERVAL '1 hour')
+     ON CONFLICT (run_id, user_id) DO NOTHING`
+  );
+  // One opt-out so the menu can be seen in its "reminders off" state:
+  // Maya has silenced reminders on Harbor Promenade, where she is an
+  // attendee but not the organizer.
+  await pool.query(
+    `INSERT INTO run_reminder_optouts (run_id, user_id)
+     VALUES (900002, -901)
+     ON CONFLICT DO NOTHING`
+  );
   // The explicit ids above bypass the sequence; push it past them so the
   // first run a tester posts does not collide with a demo row.
   await pool.query(
@@ -667,6 +828,35 @@ async function migrate() {
       PRIMARY KEY (run_id, user_id)
     )
   `);
+  // Reminders carry per-user intent (who is scheduled to be nudged and
+  // when), so the table is staging-private and staging seeds its own
+  // demo rows. sent_at is the dedup key: an atomic transition from NULL
+  // to a timestamp is the only thing that counts as "fired".
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS run_reminders (
+      run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
+      remind_at TIMESTAMPTZ NOT NULL,
+      sent_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (run_id, user_id)
+    )
+  `);
+  await pool.query(
+    `COMMENT ON TABLE run_reminders IS 'staging:private'`
+  );
+  // Per-run opt-out. Row absent means reminders on, so the default is
+  // "everyone gets the reminder" with no boolean to migrate.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS run_reminder_optouts (
+      run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
+      PRIMARY KEY (run_id, user_id)
+    )
+  `);
+  await pool.query(
+    `COMMENT ON TABLE run_reminder_optouts IS 'staging:private'`
+  );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS runs_starts_at_idx ON runs (starts_at)`
   );
