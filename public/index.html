@@ -337,6 +337,15 @@
             class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">24h</button>
         </div>
       </div>
+      <div id="dist-filter" role="group" aria-label="Filter by distance"
+        class="mt-4 mb-3 flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        <button id="dist-5k" type="button" data-dist="5k" aria-pressed="false"
+          class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]">5K</button>
+        <button id="dist-10k" type="button" data-dist="10k" aria-pressed="false"
+          class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]">10K</button>
+        <button id="dist-half" type="button" data-dist="half" aria-pressed="false"
+          class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]">Half</button>
+      </div>
       <div id="run-list" class="space-y-3"></div>
     </section>
 
@@ -468,7 +477,27 @@
       sheet: null,
       me: null,          // resolved from the first API response we own
       timeFormat: 'auto', // mode: 'auto' (follow the locale), '12' or '24'; resolved at boot below
+      dist: [],          // active distance chips, e.g. ['5k']; empty shows everything
     };
+
+    // One definition per chip: the km window it matches and the words the
+    // card reads. A run stores its planned distance in whole or half km.
+    var DIST_FILTERS = {
+      '5k': { min: 1, max: 7, label: '5K' },
+      '10k': { min: 8, max: 14, label: '10K' },
+      'half': { min: 18, max: 26, label: 'Half' },
+    };
+
+    function distInRange(run, filterId) {
+      var km = Number(run.distance_km);
+      if (!Number.isFinite(km) || km <= 0) return false;
+      var f = DIST_FILTERS[filterId];
+      return !!f && km >= f.min && km < f.max;
+    }
+
+    function activeDistanceFilters() {
+      return state.dist.filter(function (id) { return !!DIST_FILTERS[id]; });
+    }
 
     /* ── Small helpers ─────────────────────────────────────────────── */
 
@@ -507,6 +536,14 @@
     // the picker falls back to the presets and the sheet still works, so a
     // hiccup on this endpoint can never block posting a run.
     function loadRunTypes() {
+      // Custom types are the signed-in member's own picker entries. An
+      // anonymous board reader has none, so skip the call instead of
+      // logging a 401 on every load (the automated checks browse with
+      // no token).
+      if (!token) {
+        state.customTypes = [];
+        return Promise.resolve();
+      }
       return api('/api/run-types').then(function (data) {
         state.customTypes = data.custom || [];
       }).catch(function () {
@@ -723,6 +760,16 @@
     // Planned duration in whole minutes, formatted the way the app talks:
     // under an hour reads in minutes, an hour or more splits into hours
     // and leftover minutes. Not a clock time, so fmtTime is not involved.
+    // Planned distance in kilometres, formatted the way runners talk:
+    // whole km for round numbers, one decimal otherwise ("21.1 km").
+    // Not a clock time, so fmtTime is not involved.
+    function fmtKm(km) {
+      var v = Number(km);
+      if (!Number.isFinite(v) || v <= 0) return '';
+      v = Math.round(v * 10) / 10;
+      return (Number.isInteger(v) ? v : v.toFixed(1)) + ' km';
+    }
+
     function fmtDuration(minutes) {
       var m = Number(minutes);
       if (!Number.isFinite(m) || m < 1) return '';
@@ -844,6 +891,9 @@
                 : '') +
               (run.type_label
                 ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] text-[14px] font-semibold">' + esc(run.type_label) + '</span>'
+                : '') +
+              (run.distance_km
+                ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#12243d] text-[#0a7aff] dark:text-[#5aa9ff] text-[14px] font-semibold">' + esc(fmtKm(run.distance_km)) + '</span>'
                 : '') + '</div>' +
             note +
           '</div>' +
@@ -858,6 +908,12 @@
 
     function renderList() {
       headingEl.textContent = state.tab === 'past' ? 'PAST RUNS' : 'UPCOMING RUNS';
+      var active = activeDistanceFilters();
+      var shown = active.length
+        ? state.runs.filter(function (run) {
+            return active.some(function (id) { return distInRange(run, id); });
+          })
+        : state.runs;
       if (!state.runs.length) {
         listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">' +
           (state.tab === 'past'
@@ -865,7 +921,12 @@
             : 'No upcoming runs. Tap + to post one.') + '</p>';
         return;
       }
-      listEl.innerHTML = state.runs.map(cardHtml).join('');
+      if (!shown.length) {
+        listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">' +
+          'No runs match these distances. Tap a chip again to clear it.</p>';
+        return;
+      }
+      listEl.innerHTML = shown.map(cardHtml).join('');
     }
 
     var TAB_ON = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]';
@@ -958,14 +1019,16 @@
       var TAG = 'M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01';
       var CAL = 'M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4';
       var CLOCK = 'M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v5l3.5 2';
+      var DIST_ICON = 'M4 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0M4 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0';
       var PEOPLE = 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6 6 0 0112 0M17.5 11.5a3 3 0 100-6M18 20a5.5 5.5 0 00-2-4.3';
 
       // data-type / data-duration let the checks tell a detailed run from a
       // bare one without asserting on text that may not be there.
-      var facts = '<div data-type="' + (run.type_label ? '1' : '0') + '" data-duration="' + (run.duration_minutes ? '1' : '0') + '" class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
+      var facts = '<div data-type="' + (run.type_label ? '1' : '0') + '" data-duration="' + (run.duration_minutes ? '1' : '0') + '" data-distance="' + (run.distance_km ? '1' : '0') + '" class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
         infoRow(PIN, 'Where', run.location, false, true) +
         infoRow(CAL, 'When', whenText, true) +
         (run.duration_minutes ? infoRow(CLOCK, 'Duration', fmtDuration(run.duration_minutes), false) : '') +
+        (run.distance_km ? infoRow(DIST_ICON, 'Distance', fmtKm(run.distance_km), false) : '') +
         (run.type_label ? infoRow(TAG, 'Type', run.type_label, false) : '') +
         infoRow(PEOPLE, 'Going', count + (count === 1 ? ' runner' : ' runners'), false) +
       '</div>';
@@ -1154,9 +1217,23 @@
       });
     }
 
+    // Whole-literal class strings, same reason as the tab states above.
+    var CHIP_ON = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#0a7aff] text-white';
+    var CHIP_OFF = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]';
+
+    function renderDistFilter() {
+      ['5k', '10k', 'half'].forEach(function (id) {
+        var btn = document.getElementById('dist-' + id);
+        var on = state.dist.indexOf(id) !== -1;
+        btn.className = on ? CHIP_ON : CHIP_OFF;
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+
     function render() {
       renderTimeFormat();
       renderTabs();
+      renderDistFilter();
       renderList();
       renderDetail();
     }
@@ -1459,6 +1536,11 @@
             '<span class="' + LABEL + '">Duration</span>' +
             '<input id="f-duration" type="number" min="1" max="600" step="1" inputmode="numeric" autocomplete="off" placeholder="Optional: 45" class="' + FIELD + ' text-right">' +
           '</label>' +
+          '<label id="distance-row" class="' + ROW + '">' +
+            '<svg class="shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0M4 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>' +
+            '<span class="' + LABEL + '">Distance</span>' +
+            '<input id="f-distance" type="number" min="0.5" max="200" step="0.5" inputmode="decimal" autocomplete="off" placeholder="Optional: 5" class="' + FIELD + ' text-right">' +
+          '</label>' +
           '<button id="type-row" type="button" aria-label="Type" class="' + ROW + ' w-full text-left">' +
             '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01"/></svg>' +
             '<span class="' + LABEL + '">Type</span>' +
@@ -1503,6 +1585,7 @@
       var where = contentEl.querySelector('#f-where');
       var when = contentEl.querySelector('#f-when');
       var duration = contentEl.querySelector('#f-duration');
+      var distance = contentEl.querySelector('#f-distance');
       var note = contentEl.querySelector('#f-note');
       var meetingRow = contentEl.querySelector('#meeting-row');
       var meetingInput = contentEl.querySelector('#f-meeting');
@@ -1761,6 +1844,13 @@
         if (duration.value.trim() !== '') {
           durationMinutes = duration.value.trim();
         }
+        // Optional planned distance in kilometres. Blank means "not set";
+        // anything else goes to the server as-is and the server owns
+        // validation, so the toast carries its message.
+        var distanceKm = null;
+        if (distance.value.trim() !== '') {
+          distanceKm = distance.value.trim();
+        }
         post.disabled = true;
         post.textContent = 'Posting...';
         api('/api/runs', {
@@ -1774,6 +1864,7 @@
             meeting_lat: meetingPin ? meetingPin.lat : undefined,
             meeting_lng: meetingPin ? meetingPin.lng : undefined,
             duration_minutes: durationMinutes === null ? undefined : durationMinutes,
+            distance_km: distanceKm === null ? undefined : distanceKm,
             photo_url: photo ? photo.url : undefined,
             photo_file_id: photo ? photo.id : undefined,
           }),
@@ -1815,6 +1906,8 @@
       ];
       var duration = fmtDuration(run.duration_minutes);
       if (duration) lines[1] = lines[1] + ' \u00b7 ' + duration;
+      var dist = fmtKm(run.distance_km);
+      if (dist) lines[1] = lines[1] + ' \u00b7 ' + dist;
       lines.push(isPast ? shareUrl : 'Join: ' + shareUrl);
       return lines.join('\n');
     }
@@ -2011,6 +2104,19 @@
       });
     });
 
+    // Distance chips are multi-select: each tap adds or removes one chip,
+    // and no chip active shows every run. Toggling never refetches, it
+    // only narrows what is already on the board.
+    ['5k', '10k', 'half'].forEach(function (id) {
+      document.getElementById('dist-' + id).addEventListener('click', function () {
+        var at = state.dist.indexOf(id);
+        if (at === -1) state.dist.push(id);
+        else state.dist.splice(at, 1);
+        renderDistFilter();
+        renderList();
+      });
+    });
+
     /* ── Routing: #new and #run/<id> are the deep links ────────────── */
 
     var suppressHash = false;
@@ -2084,9 +2190,20 @@
       if (stored) state.timeFormat = stored;
     })();
 
+    // A distance deep link for reviewers: the query param pre-activates
+    // chips for a single load. Same view-state rules as ?tf= above: no
+    // database write, never persisted, so a shared link cannot quietly
+    // re-set the reader's own choice.
+    (function resolveDist() {
+      var linked = (params.get('dist') || '').toLowerCase();
+      if (!linked) return;
+      state.dist = linked.split(',').filter(function (id) { return !!DIST_FILTERS[id]; });
+    })();
+
     renderTheme();
     renderTimeFormat();
     renderTabs();
+    renderDistFilter();
     loadRunTypes();
     loadRuns().then(route);
 
