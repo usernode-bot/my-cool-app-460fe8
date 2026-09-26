@@ -108,6 +108,11 @@ const MAX_LOCATION = 120;
 const MAX_NOTE = 200;
 const MAX_PHOTO_URL = 500;
 const MAX_PHOTO_FILE_ID = 64;
+// Preset run types. Keep in sync with PRESET_TYPES in public/index.html:
+// the server is authoritative for validation, the frontend list drives the
+// picker, and a label is only valid if BOTH sides know it.
+const PRESET_TYPES = ['Easy', 'Tempo', 'Long Run', 'Intervals', 'Race'];
+const MAX_TYPE_LABEL = 30;
 // A minute of slack absorbs clock skew between the phone that filled in
 // the picker and this container.
 const FUTURE_SLACK_MS = 60 * 1000;
@@ -118,7 +123,7 @@ const FUTURE_SLACK_MS = 60 * 1000;
 const RUN_SELECT = `
   SELECT r.id, r.location, r.note, r.starts_at,
          r.organizer_id, r.organizer_username,
-         r.photo_url, r.photo_file_id,
+         r.photo_url, r.photo_file_id, r.type_label,
          (SELECT COUNT(*) FROM run_attendees a WHERE a.run_id = r.id)::int
            AS attendee_count,
          EXISTS (
@@ -139,6 +144,118 @@ const RUN_SELECT = `
          ), ARRAY[]::varchar[]) AS preview
   FROM runs r
 `;
+
+/* ── Run types API ─────────────────────────────────────────────────────
+ * Presets are constants, never rows. Custom types are one member's own
+ * picker entries: private to them, case-insensitively unique against
+ * presets and their own list, and never a foreign key from the public
+ * runs table (runs store the label itself).
+ * ──────────────────────────────────────────────────────────────────── */
+
+// Shared by the types endpoints and by POST /api/runs, so both agree on
+// what a valid label is. Returns the trimmed label, or an error object the
+// caller turns into a response.
+function validateTypeLabel(raw, ownerId, excludeId) {
+  const label = String(raw ?? '').trim();
+  if (!label) return { error: 'Give the type a name.' };
+  if (label.length > MAX_TYPE_LABEL) {
+    return { error: 'That type name is too long.' };
+  }
+  // An emoji-only or symbol-only name would render as an unsearchable chip;
+  // require at least one letter or number anywhere in the label.
+  if (!/\p{L}|\p{N}/u.test(label)) {
+    return { error: 'Use letters or numbers in the type name.' };
+  }
+  const lower = label.toLowerCase();
+  if (PRESET_TYPES.some((p) => p.toLowerCase() === lower)) {
+    return { error: 'That name is already a preset type.' };
+  }
+  return pool.query(
+    `SELECT id, label FROM run_type_labels
+     WHERE owner_id = $1 AND LOWER(label) = LOWER($2) AND id <> COALESCE($3, 0)`,
+    [ownerId, label, excludeId ?? null]
+  ).then(({ rows }) => {
+    if (rows.length) return { error: 'You already have a type with that name.' };
+    return { label: label };
+  }).catch((err) => ({ dbError: err }));
+}
+
+app.get('/api/run-types', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, label, created_at FROM run_type_labels
+       WHERE owner_id = $1 ORDER BY created_at DESC, id DESC`,
+      [req.user.id]
+    );
+    res.json({ presets: PRESET_TYPES, custom: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/run-types', async (req, res) => {
+  const verdict = await validateTypeLabel(req.body?.label, req.user.id, null);
+  if (verdict.dbError) return res.status(500).json({ error: verdict.dbError.message });
+  if (verdict.error) return res.status(409).json({ error: verdict.error });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO run_type_labels (owner_id, label) VALUES ($1, $2)
+       RETURNING id, label, created_at`,
+      [req.user.id, verdict.label]
+    );
+    res.json({ type: rows[0] });
+  } catch (err) {
+    // The unique index is the last word when two tabs race; map it to the
+    // same friendly message as the pre-check.
+    if (err && err.code === '23505') {
+      return res.status(409).json({ error: 'You already have a type with that name.' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/run-types/:id', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad type id' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT id FROM run_type_labels WHERE id = $1 AND owner_id = $2`,
+      [id, req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Type not found' });
+    const verdict = await validateTypeLabel(req.body?.label, req.user.id, id);
+    if (verdict.dbError) return res.status(500).json({ error: verdict.dbError.message });
+    if (verdict.error) return res.status(409).json({ error: verdict.error });
+    const updated = await pool.query(
+      `UPDATE run_type_labels SET label = $2 WHERE id = $1
+       RETURNING id, label, created_at`,
+      [id, verdict.label]
+    );
+    res.json({ type: updated.rows[0] });
+  } catch (err) {
+    if (err && err.code === '23505') {
+      return res.status(409).json({ error: 'You already have a type with that name.' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Deleting a type never rewrites history: runs keep the label they were
+// posted with, the name simply stops being pickable.
+app.delete('/api/run-types/:id', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad type id' });
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM run_type_labels WHERE id = $1 AND owner_id = $2`,
+      [id, req.user.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Type not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // List runs. `upcoming` is the default tab: anything that has not started
 // yet, soonest first. `past` reads the other way and is capped.
@@ -162,6 +279,7 @@ app.post('/api/runs', async (req, res) => {
   const location = String(req.body?.location ?? '').trim();
   const rawNote = String(req.body?.note ?? '').trim();
   const startsAt = new Date(req.body?.starts_at ?? '');
+  const rawType = String(req.body?.type ?? '').trim();
 
   if (!location) return res.status(400).json({ error: 'Add a location.' });
   if (location.length > MAX_LOCATION) {
@@ -169,6 +287,28 @@ app.post('/api/runs', async (req, res) => {
   }
   if (rawNote.length > MAX_NOTE) {
     return res.status(400).json({ error: 'That note is too long.' });
+  }
+  // A run type is optional. When present it must be a preset or one of the
+  // caller's own custom types, so the board only ever shows names somebody
+  // deliberately added. The stored label keeps the casing the type was
+  // created with, not the casing of this request.
+  let typeLabel = null;
+  if (rawType) {
+    if (rawType.length > MAX_TYPE_LABEL) {
+      return res.status(400).json({ error: 'That type name is too long.' });
+    }
+    const lower = rawType.toLowerCase();
+    const ownTypes = await pool.query(
+      `SELECT label FROM run_type_labels WHERE owner_id = $1`,
+      [req.user.id]
+    );
+    const preset = PRESET_TYPES.find((p) => p.toLowerCase() === lower);
+    const own = preset ? null
+      : ownTypes.rows.find((row) => String(row.label).toLowerCase() === lower);
+    if (!preset && !own) {
+      return res.status(400).json({ error: 'That run type is no longer available.' });
+    }
+    typeLabel = preset || own.label;
   }
   // A run photo is optional, but uploaded via the bridge before this
   // request is sent, so what arrives here is always the pair of values the
@@ -194,8 +334,8 @@ app.post('/api/runs', async (req, res) => {
     // together or not at all.
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id, type_label)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
       [
         location,
         rawNote || null,
@@ -204,6 +344,7 @@ app.post('/api/runs', async (req, res) => {
         req.user.username,
         photoUrl || null,
         photoFileId || null,
+        typeLabel,
       ]
     );
     const id = rows[0].id;
@@ -394,6 +535,7 @@ const SEED_RUNS = [
     id: 900001,
     location: 'Staging demo: Riverside Park, main gate',
     note: 'easy 5k, ~6:30/km',
+    type: 'Staging demo: Trail',
     dayOffset: 0,
     hour: 18,
     minute: 30,
@@ -405,6 +547,7 @@ const SEED_RUNS = [
     id: 900002,
     location: 'Staging demo: Harbor Promenade',
     note: null,
+    type: null,
     dayOffset: 1,
     hour: 7,
     minute: 0,
@@ -415,6 +558,7 @@ const SEED_RUNS = [
     id: 900003,
     location: 'Staging demo: Old Town loop',
     note: 'hills, take it steady',
+    type: null,
     dayOffset: -3,
     hour: 8,
     minute: 0,
@@ -439,8 +583,8 @@ function seedStartsAt(dayOffset, hour, minute) {
 async function seedStaging() {
   for (const run of SEED_RUNS) {
     await pool.query(
-      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url, type_label)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (id) DO UPDATE SET starts_at = EXCLUDED.starts_at`,
       [
         run.id,
@@ -450,6 +594,7 @@ async function seedStaging() {
         run.organizer[0],
         run.organizer[1],
         run.photoUrl || null,
+        run.type || null,
       ]
     );
     for (const [userId, username] of [run.organizer, ...run.joiners]) {
@@ -460,6 +605,27 @@ async function seedStaging() {
       );
     }
   }
+  // run_type_labels is staging:private, so staging starts without rows and
+  // the seeded Trail run would render typeless. Seed Maya's picker entries
+  // with fixed ids under the demo-identity convention. Never owned by the
+  // visiting user, and never named like a preset, so nothing here answers a
+  // question the app's own logic asks.
+  const SEED_TYPES = [
+    { id: 910001, owner: -901, label: 'Staging demo: Trail' },
+    { id: 910002, owner: -901, label: 'Staging demo: Track' },
+  ];
+  for (const t of SEED_TYPES) {
+    await pool.query(
+      `INSERT INTO run_type_labels (id, owner_id, label)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label`,
+      [t.id, t.owner, t.label]
+    );
+  }
+  await pool.query(
+    `SELECT setval(pg_get_serial_sequence('run_type_labels', 'id'),
+                   GREATEST((SELECT COALESCE(MAX(id), 1) FROM run_type_labels), 1))`
+  );
   // The explicit ids above bypass the sequence; push it past them so the
   // first run a tester posts does not collide with a demo row.
   await pool.query(
@@ -503,6 +669,27 @@ async function migrate() {
   `);
   await pool.query(
     `CREATE INDEX IF NOT EXISTS runs_starts_at_idx ON runs (starts_at)`
+  );
+  await pool.query(`
+    ALTER TABLE runs
+      ADD COLUMN IF NOT EXISTS type_label VARCHAR(30)
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS run_type_labels (
+      id SERIAL PRIMARY KEY,
+      owner_id INTEGER NOT NULL,
+      label VARCHAR(30) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS run_type_labels_owner_label_idx
+     ON run_type_labels (owner_id, label)`
+  );
+  // One member's own picker entries: staging copies the schema only, so
+  // seedStaging() fills it with obviously fake rows.
+  await pool.query(
+    `COMMENT ON TABLE run_type_labels IS 'staging:private'`
   );
 }
 
