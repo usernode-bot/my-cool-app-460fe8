@@ -363,6 +363,17 @@
       </header>
       <h1 class="mt-4 text-[40px] font-extrabold tracking-tight leading-none">Run details</h1>
       <div id="detail-body" class="mt-6 space-y-6"></div>
+      <div id="comment-composer" class="mt-4 flex items-center gap-2 rounded-2xl border border-[#e4e4ea] dark:border-[#33333a] px-4 py-3">
+        <input id="comment-input" type="text" maxlength="500" autocomplete="off"
+          placeholder="Add a comment"
+          aria-label="Add a comment"
+          class="flex-1 min-w-0 bg-transparent outline-none text-[17px] text-[#111114] dark:text-[#f2f2f7] placeholder:text-[#b6b6bd] dark:placeholder:text-[#6f6f78]">
+        <button id="comment-send" type="button" disabled
+          class="un-touch-target shrink-0 w-10 h-10 rounded-full bg-[#0a7aff] text-white flex items-center justify-center disabled:opacity-40"
+          aria-label="Post comment">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        </button>
+      </div>
     </section>
 
   </div>
@@ -463,7 +474,7 @@
       tab: 'upcoming',
       runs: [],
       customTypes: [],   // the signed-in member's own types, from /api/run-types
-      detail: null,      // { run, attendees }
+      detail: null,      // { run, attendees, comments }
       screen: 'home',
       sheet: null,
       me: null,          // resolved from the first API response we own
@@ -1012,19 +1023,75 @@
             ? 'You are organizing this run. Cancel it from the menu if plans change.'
             : 'Join to be counted as going. You can leave anytime.') + '</p>';
 
-      return banner + summary + facts + meeting + (isPast ? kudosCard : '') + going + footnote;
+      // Comments sit at the very bottom of the details, under the footnote,
+      // so the run's own facts stay first. The server lists the thread
+      // oldest first, so the newest comment lands last like a conversation.
+      var commentRows = (comments || []).map(function (c) {
+        var mine = !!c.can_delete;
+        var trash = mine
+          ? '<button class="comment-delete un-touch-target shrink-0 w-8 h-8 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] flex items-center justify-center" data-id="' + c.id + '" aria-label="Delete your comment">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
+            '</button>'
+          : '';
+        return '<div class="flex items-start gap-3 px-4 py-3.5">' + avatarHtml(c.username, 'md') +
+          '<div class="min-w-0 flex-1">' +
+            '<div class="flex items-center gap-2">' +
+              '<span class="min-w-0 truncate text-[15px] font-medium">' + esc(c.username) + '</span>' +
+            '</div>' +
+            '<p class="text-[17px] leading-snug break-words">' + esc(c.body) + '</p>' +
+          '</div>' + trash +
+        '</div>';
+      }).join('');
+
+      var commentsBlock = '<div id="comments-section">' +
+        '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93] dark:text-[#98989f]">COMMENTS</h3>' +
+        '<div id="comment-list" class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
+          (commentRows ||
+            '<div class="px-4 py-8 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">No comments yet.</div>') +
+        '</div>' +
+      '</div>';
+
+      return banner + summary + facts + meeting + (isPast ? kudosCard : '') + going + footnote + commentsBlock;
     }
 
     function renderDetail() {
       if (!state.detail) return;
-      detailBodyEl.innerHTML = detailHtml(state.detail.run, state.detail.attendees);
+      detailBodyEl.innerHTML = detailHtml(state.detail.run, state.detail.attendees, state.detail.comments);
     }
 
     function loadDetail(id) {
       return api('/api/runs/' + id).then(function (data) {
         state.detail = { run: data.run, attendees: data.attendees || [] };
+        return loadComments(id);
+      }).then(function () {
         return state.detail;
       });
+    }
+
+    function loadComments(id) {
+      // The thread is a page feature but never a page blocker: a hiccup
+      // leaves an empty thread behind a working run detail, with a retry
+      // on the next render.
+      return api('/api/runs/' + id + '/comments').then(function (data) {
+        if (state.detail && state.detail.run.id === id) {
+          state.detail.comments = data.comments || [];
+        }
+      }).catch(function () {
+        if (state.detail && state.detail.run.id === id) {
+          state.detail.comments = [];
+        }
+      });
+    }
+
+    function postComment(id, body) {
+      return api('/api/runs/' + id + '/comments', {
+        method: 'POST',
+        body: JSON.stringify({ body: body }),
+      });
+    }
+
+    function deleteComment(id) {
+      return api('/api/comments/' + id, { method: 'DELETE' });
     }
 
     // Whole-literal class strings, same reason as the tab states above.
@@ -1218,11 +1285,74 @@
       var apply = function () {
         homeEl.classList.toggle('hidden', name !== 'home');
         detailEl.classList.toggle('hidden', name !== 'detail');
+        // The composer belongs to the detail screen only, and a signed-out
+        // visitor has nothing to post with, so hide it rather than let a
+        // 401 surface in the console on every anonymous check load.
+        var composer = document.getElementById('comment-composer');
+        if (composer) composer.classList.toggle('hidden', name !== 'detail' || !token);
         window.scrollTo(0, 0);
       };
       if (window.unNative && unNative.transition) unNative.transition(apply, { type: type || 'none' });
       else apply();
     }
+
+    /* ── Comments: composer and delete-own ─────────────────────────── */
+
+    var commentInput = document.getElementById('comment-input');
+    var commentSend = document.getElementById('comment-send');
+
+    // The send arrow wakes only when there is something to send, matching
+    // the Post run button's disabled-until-valid pattern.
+    commentInput.addEventListener('input', function () {
+      commentSend.disabled = !commentInput.value.trim();
+    });
+
+    function submitComment() {
+      var body = commentInput.value.trim();
+      if (!body || !state.detail) return;
+      commentSend.disabled = true;
+      commentInput.disabled = true;
+      postComment(state.detail.run.id, body)
+        .then(function (data) {
+          commentInput.value = '';
+          if (state.detail) {
+            state.detail.comments = (state.detail.comments || []).concat(data.comment || []);
+            renderDetail();
+          }
+        })
+        .catch(function (err) { notify(err.message); })
+        .then(function () {
+          commentInput.disabled = false;
+          commentSend.disabled = !commentInput.value.trim();
+        });
+    }
+
+    commentSend.addEventListener('click', submitComment);
+    commentInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.isComposing) {
+        e.preventDefault();
+        submitComment();
+      }
+    });
+
+    // Delegated on the detail body next to the other taps, so a re-render
+    // never detaches the delete buttons.
+    detailBodyEl.addEventListener('click', function (e) {
+      var del = e.target.closest('.comment-delete');
+      if (!del || !state.detail) return;
+      var id = parseInt(del.dataset.id, 10);
+      del.disabled = true;
+      deleteComment(id)
+        .then(function () {
+          if (state.detail) {
+            state.detail.comments = (state.detail.comments || []).filter(function (c) {
+              return c.id !== id;
+            });
+            renderDetail();
+          }
+        })
+        .catch(function (err) { del.disabled = false; notify(err.message); });
+    });
 
     /* ── New Run: quick day and time picks ─────────────────────────── */
 

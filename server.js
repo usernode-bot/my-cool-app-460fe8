@@ -37,7 +37,11 @@ const PUBLIC_API_PATHS = new Set(['/health']);
 // navigate the app with no token) exercise the real screens instead of an
 // empty error state. Every mutation below still requires `req.user`, so an
 // anonymous reader can look but cannot post, join, leave or cancel.
-const PUBLIC_GET_API = [/^\/api\/runs$/, /^\/api\/runs\/\d+$/];
+const PUBLIC_GET_API = [
+  /^\/api\/runs$/,
+  /^\/api\/runs\/\d+$/,
+  /^\/api\/runs\/\d+\/attendees$/,
+];
 
 // The signed-in user's id, or null when nobody is signed in. Used only by the
 // two public GETs, where "have I joined this run?" is simply false.
@@ -97,6 +101,79 @@ app.get('/health', (_req, res) => {
 // the auth-gated catch-all and surface a 401 in the console on every
 // fresh load.
 app.get('/favicon.ico', (_req, res) => res.status(204).end());
+
+/* ── Comments API ────────────────────────────────────────────────────
+ * A simple thread on each run's details: one text row per member per
+ * comment, listed oldest first so the newest lands at the bottom like a
+ * conversation. Reading is public for the same reason the run board is;
+ * posting and deleting need a real user, and deletion is own-only.
+ * ──────────────────────────────────────────────────────────────────── */
+
+// Generous for a chat line; the cap keeps the field honest, not a rule
+// about what people may say.
+const MAX_COMMENT = 500;
+
+// One shape for every reader of the thread. `can_delete` mirrors what the
+// UI renders, so the client never has to compare ids itself.
+const COMMENT_SELECT = `
+  SELECT c.id, c.run_id, c.user_id, c.username, c.body, c.created_at,
+         (c.user_id = $1) AS can_delete
+  FROM run_comments c
+  WHERE c.run_id = $2
+  ORDER BY c.created_at ASC, c.id ASC
+`;
+
+app.get('/api/runs/:id/comments', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad run id' });
+  try {
+    const { rows } = await pool.query(COMMENT_SELECT, [callerId(req), id]);
+    res.json({ comments: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/runs/:id/comments', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad run id' });
+  const body = String(req.body?.body ?? '').trim();
+  if (!body) return res.status(400).json({ error: 'Write a comment first.' });
+  if (body.length > MAX_COMMENT) {
+    return res.status(400).json({ error: 'That comment is too long.' });
+  }
+  try {
+    const run = await pool.query(`SELECT id FROM runs WHERE id = $1`, [id]);
+    if (!run.rows.length) return res.status(404).json({ error: 'Run not found' });
+    const { rows } = await pool.query(
+      `INSERT INTO run_comments (run_id, user_id, username, body)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, run_id, user_id, username, body, created_at,
+                 (user_id = $2) AS can_delete`,
+      [id, req.user.id, req.user.username, body]
+    );
+    res.json({ comment: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/comments/:id', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad comment id' });
+  try {
+    // The caller's id in the WHERE clause is the whole permission check:
+    // someone else's row (or an already-deleted one) simply matches nothing.
+    const { rowCount } = await pool.query(
+      `DELETE FROM run_comments WHERE id = $1 AND user_id = $2`,
+      [id, req.user.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Comment not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 /* ── Runs API ─────────────────────────────────────────────────────────
  * A run is a time and a place somebody proposed. Attendance is a row in
@@ -909,6 +986,20 @@ async function seedStaging() {
      VALUES (900003, -901), (900003, -902), (900003, -903)
      ON CONFLICT (run_id, user_id) DO NOTHING`
   );
+  // run_comments is staging-private, so the detail thread would otherwise
+  // start empty in every preview. Two short rows on Riverside (900001)
+  // show the populated shape (newest last, delete on your own only); the
+  // text and authors are obviously fake, from the demo identities above.
+  // Riverside keeps a fresh relative timestamp on every boot, so the
+  // ordering reads correctly however long the container has been up.
+  await pool.query(
+    `INSERT INTO run_comments (run_id, user_id, username, body, created_at)
+     VALUES (900001, -902, 'staging-demo-ethan', 'Staging demo comment: bringing the water vests.',
+             (SELECT starts_at FROM runs WHERE id = 900001) - INTERVAL '1 hour'),
+            (900001, -903, 'staging-demo-nina', 'Staging demo comment: I will be 5 minutes late, save me a spot.',
+             (SELECT starts_at FROM runs WHERE id = 900001) - INTERVAL '30 minutes')
+     ON CONFLICT DO NOTHING`
+  );
   // The explicit ids above bypass the sequence; push it past them so the
   // first run a tester posts does not collide with a demo row.
   await pool.query(
@@ -1027,6 +1118,28 @@ async function migrate() {
   // seedStaging() fills it with obviously fake rows.
   await pool.query(
     `COMMENT ON TABLE run_type_labels IS 'staging:private'`
+  );
+  // Run comments are marked staging-private per the feature request, even
+  // though the thread itself renders publicly: staging previews then show
+  // only the fake demo rows seedStaging() writes, never a copy of what real
+  // members said to each other. Plain text with ownership, nothing more.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS run_comments (
+      id SERIAL PRIMARY KEY,
+      run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
+      username VARCHAR(255) NOT NULL,
+      body VARCHAR(500) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    `COMMENT ON TABLE run_comments IS 'staging:private'`
+  );
+  // Newest last is the thread order everywhere, so serve it from an index.
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS run_comments_run_idx
+     ON run_comments (run_id, created_at)`
   );
 }
 
