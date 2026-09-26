@@ -11,6 +11,40 @@
       "expectText": "Staging demo: Riverside Park"
     },
     {
+      "name": "New Run sheet shows the RSVP cutoff row",
+      "path": "/#new",
+      "expectSelector": "#cutoff-row"
+    },
+    {
+      "name": "Run detail shows the RSVP cutoff time",
+      "path": "/#run/900001",
+      "expectSelector": "#detail-body [data-cutoff-run='1']",
+      "expectText": "RSVP"
+    },
+    {
+      "name": "RSVP-closed run shows the lock instead of Join",
+      "path": "/#run/900005",
+      "expectSelector": "#rsvp-closed",
+      "expectText": "RSVPs closed"
+    },
+    {
+      "name": "Locked run chip renders on the board",
+      "path": "/",
+      "expectSelector": ".run-card [data-cutoff='locked']",
+      "expectText": "River Boardwalk"
+    },
+    {
+      "name": "Open cutoff run shows Join",
+      "path": "/#run/900004",
+      "expectSelector": "#detail-action[data-action='join']",
+      "expectText": "Join"
+    },
+    {
+      "name": "Home lists upcoming runs",
+      "path": "/",
+      "expectText": "Staging demo: Riverside Park"
+    },
+    {
       "name": "New Run sheet opens",
       "path": "/#new",
       "expectSelector": "#post-run-btn"

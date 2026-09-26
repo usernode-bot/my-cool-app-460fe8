@@ -112,6 +112,10 @@ const MAX_PHOTO_FILE_ID = 64;
 // Generous for club runs; the cap keeps the field honest, not a rule
 // about how far people may run.
 const MAX_DURATION_MINUTES = 600;
+// Optional RSVP cutoff in whole hours before the start, 1..72. Blank (or
+// NULL in the database) keeps the current behaviour: people can join until
+// the run starts.
+const MAX_CUTOFF_HOURS = 72;
 // Preset run types. Keep in sync with PRESET_TYPES in public/index.html:
 // the server is authoritative for validation, the frontend list drives the
 // picker, and a label is only valid if BOTH sides know it.
@@ -139,6 +143,7 @@ const RUN_SELECT = `
          r.organizer_id, r.organizer_username,
          r.photo_url, r.photo_file_id, r.type_label, r.duration_minutes,
          r.meeting_point, r.meeting_lat, r.meeting_lng,
+         r.rsvp_cutoff_hours,
          (SELECT COUNT(*) FROM run_attendees a WHERE a.run_id = r.id)::int
            AS attendee_count,
          EXISTS (
@@ -371,6 +376,19 @@ app.post('/api/runs', async (req, res) => {
   if (isNaN(startsAt.getTime())) {
     return res.status(400).json({ error: 'Pick a date and time.' });
   }
+  // An optional RSVP cutoff in whole hours before the start. Blank means
+  // "no cutoff" and stores NULL, so every existing run behaves exactly as
+  // it did before. The 1..72 range keeps the value sane for a club run
+  // (0 would lock instantly and would be indistinguishable from a bug).
+  const rawCutoff = req.body?.rsvp_cutoff_hours;
+  let rsvpCutoffHours = null;
+  if (rawCutoff !== undefined && rawCutoff !== null && String(rawCutoff).trim() !== '') {
+    const parsedCutoff = Number(rawCutoff);
+    if (!Number.isInteger(parsedCutoff) || parsedCutoff < 1 || parsedCutoff > MAX_CUTOFF_HOURS) {
+      return res.status(400).json({ error: 'Use an RSVP cutoff between 1 and 72 hours.' });
+    }
+    rsvpCutoffHours = parsedCutoff;
+  }
   if (startsAt.getTime() < Date.now() - FUTURE_SLACK_MS) {
     return res.status(400).json({ error: 'Pick a time in the future.' });
   }
@@ -393,8 +411,8 @@ app.post('/api/runs', async (req, res) => {
     // together or not at all.
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id, type_label, duration_minutes, meeting_point, meeting_lat, meeting_lng)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id, type_label, duration_minutes, meeting_point, meeting_lat, meeting_lng, rsvp_cutoff_hours)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
       [
         location,
         rawNote || null,
@@ -408,6 +426,7 @@ app.post('/api/runs', async (req, res) => {
         rawMeeting || null,
         rawMeeting ? meetingLat : null,
         rawMeeting ? meetingLng : null,
+        rsvpCutoffHours,
       ]
     );
     const id = rows[0].id;
@@ -457,12 +476,21 @@ app.get('/api/runs/:id', async (req, res) => {
 // Shared guard: the run must exist and must not already have started.
 async function loadJoinableRun(id) {
   const { rows } = await pool.query(
-    `SELECT id, organizer_id, starts_at FROM runs WHERE id = $1`,
+    `SELECT id, organizer_id, starts_at, rsvp_cutoff_hours FROM runs WHERE id = $1`,
     [id]
   );
   if (!rows.length) return { error: 404, message: 'Run not found' };
   if (new Date(rows[0].starts_at).getTime() < Date.now()) {
     return { error: 409, message: 'That run has already happened.' };
+  }
+  // The cutoff is the same rule for joining AND leaving: a locked roster
+  // must not shrink after the organizer planned for it. Compute from the
+  // stored start time, never wall-clock rounding.
+  const cutoffMs =
+    new Date(rows[0].starts_at).getTime() - (rows[0].rsvp_cutoff_hours || 0) * 3600000;
+  if (rows[0].rsvp_cutoff_hours && Date.now() >= cutoffMs) {
+    return { error: 409, message: 'RSVPs are closed for this run. It locks ' +
+      rows[0].rsvp_cutoff_hours + ' hours before the start.', locked: true };
   }
   return { run: rows[0] };
 }
@@ -797,6 +825,32 @@ const SEED_RUNS = [
     meetingLng: -74.0102,
   },
   {
+    id: 900004,
+    location: 'Staging demo: Sunrise Hill',
+    note: 'Optional RSVP cutoff, still open',
+    type: null,
+    // Relative to boot time on purpose: a fixed wall-clock hour cannot
+    // keep a cutoff state stable across timezones and reboot times, and
+    // the conflict update re-runs on every boot, so the two demo runs
+    // below always sit on the correct side of their cutoff.
+    inHours: 48,
+    cutoffHours: 2,
+    organizer: [-903, 'staging-demo-nina'],
+    joiners: [],
+  },
+  {
+    id: 900005,
+    location: 'Staging demo: River Boardwalk',
+    note: 'Optional RSVP cutoff, RSVPs closed',
+    type: null,
+    // Starts 2 hours out with a 3-hour cutoff, so its deadline passed an
+    // hour ago: the lock is already on at every boot, in every timezone.
+    inHours: 2,
+    cutoffHours: 3,
+    organizer: [-902, 'staging-demo-ethan'],
+    joiners: [],
+  },
+  {
     id: 900003,
     location: 'Staging demo: Old Town loop',
     note: 'hills, take it steady',
@@ -822,18 +876,26 @@ function seedStartsAt(dayOffset, hour, minute) {
   return d.toISOString();
 }
 
+// Boot-relative starts for the cutoff demo runs: hours from now, so the
+// locked / open states do not depend on the container's timezone or on
+// what time of day it happens to be.
+function seedStartsIn(hours) {
+  return new Date(Date.now() + hours * 3600000).toISOString();
+}
+
 async function seedStaging() {
   for (const run of SEED_RUNS) {
     await pool.query(
-      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url, type_label, duration_minutes, meeting_point, meeting_lat, meeting_lng)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url, type_label, duration_minutes, meeting_point, meeting_lat, meeting_lng, rsvp_cutoff_hours)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        ON CONFLICT (id) DO UPDATE SET starts_at = EXCLUDED.starts_at,
-         duration_minutes = EXCLUDED.duration_minutes`,
+         duration_minutes = EXCLUDED.duration_minutes,
+         rsvp_cutoff_hours = EXCLUDED.rsvp_cutoff_hours`,
       [
         run.id,
         run.location,
         run.note,
-        seedStartsAt(run.dayOffset, run.hour, run.minute),
+        run.inHours != null ? seedStartsIn(run.inHours) : seedStartsAt(run.dayOffset, run.hour, run.minute),
         run.organizer[0],
         run.organizer[1],
         run.photoUrl || null,
@@ -842,6 +904,7 @@ async function seedStaging() {
         run.meeting || null,
         run.meeting ? run.meetingLat : null,
         run.meeting ? run.meetingLng : null,
+        run.cutoffHours || null,
       ]
     );
     for (const [userId, username] of [run.organizer, ...run.joiners]) {
@@ -1010,6 +1073,13 @@ async function migrate() {
   await pool.query(`
     ALTER TABLE runs
       ADD COLUMN IF NOT EXISTS duration_minutes SMALLINT
+  `);
+  // Optional RSVP cutoff, in whole hours before the run starts. NULL means
+  // no cutoff, which is every run posted before this feature and every run
+  // posted without one after it.
+  await pool.query(`
+    ALTER TABLE runs
+      ADD COLUMN IF NOT EXISTS rsvp_cutoff_hours SMALLINT
   `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS run_type_labels (

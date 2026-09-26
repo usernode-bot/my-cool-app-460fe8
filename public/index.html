@@ -500,6 +500,40 @@
       if (window.unNative && unNative.toast) unNative.toast(message);
     }
 
+    /* ── RSVP cutoff ──────────────────────────────────────────────── */
+
+    // An optional cutoff locks joining X whole hours before the run starts.
+    // All three helpers read the run's own start time, so a card rendered
+    // minutes apart stays consistent.
+    function cutoffDeadline(run) {
+      var hours = Number(run.rsvp_cutoff_hours);
+      if (!Number.isFinite(hours) || hours < 1) return null;
+      return new Date(run.starts_at).getTime() - hours * 3600000;
+    }
+
+    function cutoffLocked(run) {
+      var deadline = cutoffDeadline(run);
+      return deadline != null && Date.now() >= deadline;
+    }
+
+    // The sentence the detail screen shows and the card chip reuses a
+    // compact form of. Plain hours only; the sheet caps the field at 72.
+    function fmtCutoff(run) {
+      var hours = Number(run.rsvp_cutoff_hours);
+      if (!Number.isFinite(hours) || hours < 1) return '';
+      return 'RSVP closes ' + hours + (hours === 1 ? ' hour' : ' hours') + ' before start';
+    }
+
+    function fmtCutoffClock(d) {
+      var day;
+      try {
+        day = new Intl.DateTimeFormat(locale, {
+          weekday: 'short', month: 'short', day: 'numeric',
+        }).format(d);
+      } catch (err) { day = ''; }
+      return (day ? day + ' · ' : '') + fmtTime(d);
+    }
+
     /* ── Run types ────────────────────────────────────────────────── */
 
     // The signed-in member's own custom types, fetched once at boot and
@@ -826,11 +860,19 @@
           '>Kudos ' + (run.kudos_count || 0) + '</button>';
       }
 
+      // A cutoff hides the join tap entirely once it has passed, exactly
+      // as a started run does; the red chip explains why. The Joined
+      // state is untouched: people who made it in keep their spot.
       var action = '';
       if (!past) {
-        action = run.joined
-          ? '<button type="button" class="join-btn shrink-0 px-5 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] text-[17px] font-semibold" data-id="' + run.id + '" data-joined="1">Joined</button>'
-          : '<button type="button" class="join-btn shrink-0 px-6 py-2.5 rounded-full bg-[#0a7aff] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0">Join</button>';
+        var locked = cutoffLocked(run);
+        if (run.joined) {
+          action = '<button type="button" class="join-btn shrink-0 px-5 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] text-[17px] font-semibold" data-id="' + run.id + '" data-joined="1">Joined</button>';
+        } else if (locked) {
+          action = '<span class="shrink-0 px-3 py-1 rounded-full bg-[#ffe4e2] dark:bg-[#3a1715] text-[#ff3b30] dark:text-[#ff6961] text-[15px] font-semibold">RSVP closed</span>';
+        } else {
+          action = '<button type="button" class="join-btn shrink-0 px-6 py-2.5 rounded-full bg-[#0a7aff] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0">Join</button>';
+        }
       }
 
       return '<div class="run-card un-pressable bg-white dark:bg-[#1c1c20] rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]" role="button" tabindex="0" data-id="' + run.id + '">' +
@@ -844,6 +886,11 @@
                 : '') +
               (run.type_label
                 ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] text-[14px] font-semibold">' + esc(run.type_label) + '</span>'
+                : '') +
+              (!past && run.rsvp_cutoff_hours
+                ? '<span data-cutoff="' + (cutoffLocked(run) ? 'locked' : 'open') + '" class="shrink-0 px-2 py-0.5 rounded-md text-[14px] font-semibold ' + (cutoffLocked(run)
+                    ? 'bg-[#ffe4e2] dark:bg-[#3a1715] text-[#ff3b30] dark:text-[#ff6961]'
+                    : 'bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f]') + '">' + esc(fmtCutoff(run)) + '</span>'
                 : '') + '</div>' +
             note +
           '</div>' +
@@ -898,9 +945,14 @@
 
       var action = '';
       if (!isPast && !run.is_organizer) {
-        action = run.joined
-          ? '<button id="detail-action" type="button" data-action="leave" class="shrink-0 px-6 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8] text-[17px] font-semibold">Leave</button>'
-          : '<button id="detail-action" type="button" data-action="join" class="shrink-0 px-7 py-2.5 rounded-full bg-[#0a7aff] text-white text-[17px] font-semibold">Join</button>';
+        var locked = cutoffLocked(run);
+        if (run.joined) {
+          action = '<button id="detail-action" type="button" data-action="leave" class="shrink-0 px-6 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8] text-[17px] font-semibold">Leave</button>';
+        } else if (locked) {
+          action = '<span id="rsvp-closed" class="shrink-0 px-3 py-1 rounded-full bg-[#ffe4e2] dark:bg-[#3a1715] text-[#ff3b30] dark:text-[#ff6961] text-[15px] font-semibold">RSVPs closed</span>';
+        } else {
+          action = '<button id="detail-action" type="button" data-action="join" class="shrink-0 px-7 py-2.5 rounded-full bg-[#0a7aff] text-white text-[17px] font-semibold">Join</button>';
+        }
       }
 
       var note = run.note
@@ -958,14 +1010,26 @@
       var TAG = 'M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01';
       var CAL = 'M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4';
       var CLOCK = 'M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v5l3.5 2';
+      var CUTOFF = 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2';
       var PEOPLE = 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6 6 0 0112 0M17.5 11.5a3 3 0 100-6M18 20a5.5 5.5 0 00-2-4.3';
+
+      // The cutoff reads as a timestamp, so the sentence stays true no
+      // matter how long the screen stays open.
+      var cutoffDeadlineDate = cutoffDeadline(run);
+      var cutoffText = '';
+      if (cutoffDeadlineDate) {
+        cutoffText = cutoffLocked(run)
+          ? 'Closed ' + fmtCutoffClock(cutoffDeadlineDate)
+          : 'Closes ' + fmtCutoffClock(cutoffDeadlineDate);
+      }
 
       // data-type / data-duration let the checks tell a detailed run from a
       // bare one without asserting on text that may not be there.
-      var facts = '<div data-type="' + (run.type_label ? '1' : '0') + '" data-duration="' + (run.duration_minutes ? '1' : '0') + '" class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
+      var facts = '<div data-type="' + (run.type_label ? '1' : '0') + '" data-duration="' + (run.duration_minutes ? '1' : '0') + '" data-cutoff-run="' + (run.rsvp_cutoff_hours ? '1' : '0') + '" class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
         infoRow(PIN, 'Where', run.location, false, true) +
         infoRow(CAL, 'When', whenText, true) +
         (run.duration_minutes ? infoRow(CLOCK, 'Duration', fmtDuration(run.duration_minutes), false) : '') +
+        (cutoffText ? infoRow(CUTOFF, 'RSVP', cutoffText, false) : '') +
         (run.type_label ? infoRow(TAG, 'Type', run.type_label, false) : '') +
         infoRow(PEOPLE, 'Going', count + (count === 1 ? ' runner' : ' runners'), false) +
       '</div>';
@@ -1010,7 +1074,11 @@
           ? 'This run has already happened.'
           : run.is_organizer
             ? 'You are organizing this run. Cancel it from the menu if plans change.'
-            : 'Join to be counted as going. You can leave anytime.') + '</p>';
+            : run.joined
+              ? 'Join to be counted as going. You can leave anytime.'
+              : cutoffLocked(run)
+                ? 'RSVPs are closed. The organizer set a cutoff of ' + Number(run.rsvp_cutoff_hours) + (Number(run.rsvp_cutoff_hours) === 1 ? ' hour' : ' hours') + ' before the start.'
+                : 'Join to be counted as going. You can leave anytime.') + '</p>';
 
       return banner + summary + facts + meeting + (isPast ? kudosCard : '') + going + footnote;
     }
@@ -1459,6 +1527,11 @@
             '<span class="' + LABEL + '">Duration</span>' +
             '<input id="f-duration" type="number" min="1" max="600" step="1" inputmode="numeric" autocomplete="off" placeholder="Optional: 45" class="' + FIELD + ' text-right">' +
           '</label>' +
+          '<label id="cutoff-row" class="' + ROW + '">' +
+            '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2M12 3v1M12 20v1M4.9 4.9l.7.7M18.4 18.4l.7.7"/></svg>' +
+            '<span class="' + LABEL + '">RSVP closes</span>' +
+            '<input id="f-cutoff" type="number" min="1" max="72" step="1" inputmode="numeric" autocomplete="off" placeholder="Optional: 2h before" class="' + FIELD + ' text-right">' +
+          '</label>' +
           '<button id="type-row" type="button" aria-label="Type" class="' + ROW + ' w-full text-left">' +
             '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01"/></svg>' +
             '<span class="' + LABEL + '">Type</span>' +
@@ -1503,6 +1576,7 @@
       var where = contentEl.querySelector('#f-where');
       var when = contentEl.querySelector('#f-when');
       var duration = contentEl.querySelector('#f-duration');
+      var cutoff = contentEl.querySelector('#f-cutoff');
       var note = contentEl.querySelector('#f-note');
       var meetingRow = contentEl.querySelector('#meeting-row');
       var meetingInput = contentEl.querySelector('#f-meeting');
@@ -1774,6 +1848,7 @@
             meeting_lat: meetingPin ? meetingPin.lat : undefined,
             meeting_lng: meetingPin ? meetingPin.lng : undefined,
             duration_minutes: durationMinutes === null ? undefined : durationMinutes,
+            rsvp_cutoff_hours: cutoff.value.trim() === '' ? undefined : cutoff.value.trim(),
             photo_url: photo ? photo.url : undefined,
             photo_file_id: photo ? photo.id : undefined,
           }),
@@ -1821,6 +1896,12 @@
 
     function joinRun(id) {
       return api('/api/runs/' + id + '/join', { method: 'POST' });
+    }
+
+    // The locked-join server answer, matched on words rather than status
+    // codes so it keeps working if the response shape grows fields.
+    function isCutoffError(err) {
+      return /RSVPs are closed/i.test(err && err.message);
     }
 
     function leaveRun(id) {
@@ -1900,7 +1981,18 @@
       (leaving ? leaveRun(id) : joinRun(id))
         .then(function () { return refreshBoth(id); })
         .then(function () { notify(leaving ? 'You left this run.' : 'You are going.'); })
-        .catch(function (err) { btn.disabled = false; notify(err.message); });
+        .catch(function (err) {
+          if (isCutoffError(err)) {
+            // The window moved on while the screen was open. Re-render
+            // from the server so the lock is visible, then tell the member.
+            return loadDetail(id)
+              .then(renderDetail)
+              .catch(function () { /* keep the stale screen */ })
+              .then(function () { notify(err.message); });
+          }
+          btn.disabled = false;
+          notify(err.message);
+        });
     });
 
     document.getElementById('more-btn').addEventListener('click', function (e) {
