@@ -108,6 +108,10 @@ const MAX_LOCATION = 120;
 const MAX_NOTE = 200;
 const MAX_PHOTO_URL = 500;
 const MAX_PHOTO_FILE_ID = 64;
+// Planned duration range in whole minutes, enforced in POST /api/runs.
+// Generous for club runs; the cap keeps the field honest, not a rule
+// about how far people may run.
+const MAX_DURATION_MINUTES = 600;
 // Preset run types. Keep in sync with PRESET_TYPES in public/index.html:
 // the server is authoritative for validation, the frontend list drives the
 // picker, and a label is only valid if BOTH sides know it.
@@ -127,7 +131,7 @@ const REMINDER_LEAD = "interval '1 hour'";
 const RUN_SELECT = `
   SELECT r.id, r.location, r.note, r.starts_at,
          r.organizer_id, r.organizer_username,
-         r.photo_url, r.photo_file_id, r.type_label,
+         r.photo_url, r.photo_file_id, r.type_label, r.duration_minutes,
          (SELECT COUNT(*) FROM run_attendees a WHERE a.run_id = r.id)::int
            AS attendee_count,
          EXISTS (
@@ -341,6 +345,18 @@ app.post('/api/runs', async (req, res) => {
   if (startsAt.getTime() < Date.now() - FUTURE_SLACK_MS) {
     return res.status(400).json({ error: 'Pick a time in the future.' });
   }
+  // Planned duration is optional. Empty string, undefined and null all
+  // mean "not set" and store NULL; anything else must be a whole number
+  // of minutes in a sane range for a club run.
+  const rawDuration = req.body?.duration_minutes;
+  let durationMinutes = null;
+  if (rawDuration !== undefined && rawDuration !== null && String(rawDuration).trim() !== '') {
+    const parsed = Number(rawDuration);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_DURATION_MINUTES) {
+      return res.status(400).json({ error: 'Use a duration between 1 and 600 minutes.' });
+    }
+    durationMinutes = parsed;
+  }
 
   const client = await pool.connect();
   try {
@@ -348,8 +364,8 @@ app.post('/api/runs', async (req, res) => {
     // together or not at all.
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id, type_label)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id, type_label, duration_minutes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
       [
         location,
         rawNote || null,
@@ -359,6 +375,7 @@ app.post('/api/runs', async (req, res) => {
         photoUrl || null,
         photoFileId || null,
         typeLabel,
+        durationMinutes,
       ]
     );
     const id = rows[0].id;
@@ -722,6 +739,7 @@ const SEED_RUNS = [
     location: 'Staging demo: Riverside Park, main gate',
     note: 'easy 5k, ~6:30/km',
     type: 'Staging demo: Trail',
+    duration: 30,
     dayOffset: 0,
     hour: 18,
     minute: 30,
@@ -769,9 +787,10 @@ function seedStartsAt(dayOffset, hour, minute) {
 async function seedStaging() {
   for (const run of SEED_RUNS) {
     await pool.query(
-      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url, type_label)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (id) DO UPDATE SET starts_at = EXCLUDED.starts_at`,
+      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url, type_label, duration_minutes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (id) DO UPDATE SET starts_at = EXCLUDED.starts_at,
+         duration_minutes = EXCLUDED.duration_minutes`,
       [
         run.id,
         run.location,
@@ -781,6 +800,7 @@ async function seedStaging() {
         run.organizer[1],
         run.photoUrl || null,
         run.type || null,
+        run.duration || null,
       ]
     );
     for (const [userId, username] of [run.organizer, ...run.joiners]) {
@@ -939,6 +959,13 @@ async function migrate() {
   await pool.query(`
     ALTER TABLE runs
       ADD COLUMN IF NOT EXISTS type_label VARCHAR(30)
+  `);
+  // Planned duration in whole minutes, optional: NULL means the organizer
+  // did not set one and every screen renders the run as before. Validated
+  // in the app layer (1..600 integer) like every other POST field.
+  await pool.query(`
+    ALTER TABLE runs
+      ADD COLUMN IF NOT EXISTS duration_minutes SMALLINT
   `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS run_type_labels (
