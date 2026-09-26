@@ -1105,6 +1105,199 @@
       else apply();
     }
 
+    /* ── New Run: quick day and time picks ─────────────────────────── */
+
+    // Common run start times, [hour, minute]. The default and the time
+    // pills both come from this one list.
+    var RUN_TIMES = [[6, 0], [6, 30], [7, 0], [8, 0], [12, 0], [17, 30], [18, 0], [18, 30]];
+
+    // Whole-literal class strings: the Tailwind extractor never sees an
+    // assembled one. ON matches the Tomorrow badge on the list.
+    var PICK_BASE = 'shrink-0 rounded-full border px-3.5 py-2 text-[15px] ';
+    var PICK_CLASS = {
+      on: PICK_BASE + 'bg-[#dbeafe] dark:bg-[#12243d] text-[#0a7aff] dark:text-[#5aa9ff] border-transparent font-semibold',
+      off: PICK_BASE + 'border-[#e4e4ea] dark:border-[#33333a] text-[#111114] dark:text-[#f2f2f7]',
+      disabled: PICK_BASE + 'border-[#e4e4ea] dark:border-[#33333a] text-[#111114] dark:text-[#f2f2f7] opacity-40',
+    };
+    var PICK_ROW = 'flex gap-2 overflow-x-auto overscroll-x-contain -mx-1 px-1 pb-0.5';
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+
+    // datetime-local wants local wall-clock time, never an ISO/UTC string.
+    function toLocalInputValue(d) {
+      return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+        'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    }
+
+    // Dates are built from local parts, never by adding milliseconds, so a
+    // DST day still lands on the same wall-clock time.
+    function atSlot(day, slot) {
+      return new Date(day.getFullYear(), day.getMonth(), day.getDate(), slot[0], slot[1]);
+    }
+
+    function addDays(d, n) {
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+    }
+
+    function sameDay(a, b) {
+      return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate();
+    }
+
+    // First common start time today at least an hour away, else tomorrow 7:00.
+    function defaultStart(now) {
+      var cutoff = now.getTime() + 60 * 60 * 1000;
+      for (var i = 0; i < RUN_TIMES.length; i++) {
+        var d = atSlot(now, RUN_TIMES[i]);
+        if (d.getTime() >= cutoff) return d;
+      }
+      return atSlot(addDays(now, 1), [7, 0]);
+    }
+
+    // Today, Tomorrow, then this weekend's days not already covered.
+    function dayPicks(now) {
+      var picks = [
+        { key: 'today', label: 'Today', date: addDays(now, 0) },
+        { key: 'tomorrow', label: 'Tomorrow', date: addDays(now, 1) },
+      ];
+      for (var n = 2; n <= 6; n++) {
+        var d = addDays(now, n);
+        var dow = d.getDay();
+        if (dow !== 6 && dow !== 0) continue;
+        var label;
+        try { label = new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(d); }
+        catch (err) { label = dow === 6 ? 'Sat' : 'Sun'; }
+        picks.push({ key: dow === 6 ? 'sat' : 'sun', label: label, date: d });
+      }
+      return picks;
+    }
+
+    function parseWhen(value) {
+      if (!value) return null;
+      var d = new Date(value);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // A start moment still counts as upcoming for one minute, so a run
+    // posted "now" at the top of a minute is not blocked. The server keeps
+    // the final say.
+    function isPastStart(d) {
+      return d.getTime() < Date.now() - 60 * 1000;
+    }
+
+    // Builds the pills and the summary under the When row. #f-when stays
+    // the single source of truth: every tap writes to it and fires `input`,
+    // so the sheet's own listeners run exactly as if the user had typed.
+    function attachWhenPicks(when) {
+      var whenRow = when.parentNode;
+      var now = new Date();
+      var days = dayPicks(now);
+
+      var wrap = document.createElement('div');
+      wrap.id = 'when-picks';
+      wrap.className = 'space-y-2.5 px-1';
+      wrap.setAttribute('data-time-format', effectiveFormat());
+
+      var dayRow = document.createElement('div');
+      dayRow.id = 'when-days';
+      dayRow.className = PICK_ROW;
+      days.forEach(function (p) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('data-day', p.key);
+        b.textContent = p.label;
+        b.addEventListener('click', function () { pickDay(p.date); });
+        dayRow.appendChild(b);
+      });
+
+      var timeRow = document.createElement('div');
+      timeRow.id = 'when-times';
+      timeRow.className = PICK_ROW;
+      RUN_TIMES.forEach(function (slot) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('data-time', pad2(slot[0]) + ':' + pad2(slot[1]));
+        b.textContent = fmtTime(atSlot(now, slot));
+        b.addEventListener('click', function () { pickTime(slot); });
+        timeRow.appendChild(b);
+      });
+
+      var summary = document.createElement('div');
+      summary.id = 'when-summary';
+      summary.className = 'pt-0.5';
+      summary.setAttribute('aria-live', 'polite');
+
+      wrap.appendChild(dayRow);
+      wrap.appendChild(timeRow);
+      wrap.appendChild(summary);
+      whenRow.insertAdjacentElement('afterend', wrap);
+
+      function commit(d) {
+        when.value = toLocalInputValue(d);
+        when.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      // Keeps the chosen time. Picking Today after that time has passed
+      // moves to the first common start still ahead, if there is one.
+      function pickDay(day) {
+        var cur = parseWhen(when.value) || defaultStart(new Date());
+        var next = atSlot(day, [cur.getHours(), cur.getMinutes()]);
+        if (isPastStart(next)) {
+          for (var i = 0; i < RUN_TIMES.length; i++) {
+            var d = atSlot(day, RUN_TIMES[i]);
+            if (!isPastStart(d)) { next = d; break; }
+          }
+        }
+        commit(next);
+      }
+
+      function pickTime(slot) {
+        var cur = parseWhen(when.value) || defaultStart(new Date());
+        commit(atSlot(cur, slot));
+      }
+
+      function render() {
+        var d = parseWhen(when.value);
+        Array.prototype.forEach.call(dayRow.children, function (b, i) {
+          var on = !!d && sameDay(d, days[i].date);
+          b.className = on ? PICK_CLASS.on : PICK_CLASS.off;
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        Array.prototype.forEach.call(timeRow.children, function (b, i) {
+          var slot = RUN_TIMES[i];
+          var on = !!d && d.getHours() === slot[0] && d.getMinutes() === slot[1];
+          var gone = !!d && sameDay(d, new Date()) && isPastStart(atSlot(d, slot));
+          b.disabled = gone;
+          b.className = gone ? PICK_CLASS.disabled : (on ? PICK_CLASS.on : PICK_CLASS.off);
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+
+        if (!d) {
+          summary.removeAttribute('data-past');
+          summary.innerHTML = '<div class="text-[15px] text-[#8e8e93] dark:text-[#98989f]">Pick a date and time.</div>';
+          return;
+        }
+        var past = isPastStart(d);
+        var full;
+        try {
+          full = new Intl.DateTimeFormat(locale, { weekday: 'long', month: 'long', day: 'numeric' }).format(d);
+        } catch (err) { full = d.toDateString(); }
+        if (past) summary.setAttribute('data-past', '1');
+        else summary.removeAttribute('data-past');
+        summary.innerHTML =
+          '<div class="text-[17px] font-semibold text-[#111114] dark:text-[#f2f2f7]">' +
+            esc(dayInfo(d).label) + ' · <span class="run-time">' + esc(fmtTime(d)) + '</span>' +
+          '</div>' +
+          (past
+            ? '<div class="text-[15px] text-[#ff3b30] dark:text-[#ff6961]">That time has passed. Pick a later one.</div>'
+            : '<div class="text-[15px] text-[#8e8e93] dark:text-[#98989f]">' + esc(full) + '</div>');
+      }
+
+      when.addEventListener('input', render);
+      when.addEventListener('change', render);
+      render();
+    }
+
     /* ── New Run sheet ─────────────────────────────────────────────── */
 
     function buildSheet() {
@@ -1344,17 +1537,14 @@
         });
       }
 
-      // Default the picker to the next round hour so a poster only has to
-      // confirm rather than fill in four fields.
-      var soon = new Date(Date.now() + 60 * 60 * 1000);
-      soon.setMinutes(0, 0, 0);
-      var pad = function (n) { return String(n).padStart(2, '0'); };
-      // datetime-local wants local wall-clock time, never an ISO/UTC string.
-      when.value = soon.getFullYear() + '-' + pad(soon.getMonth() + 1) + '-' +
-        pad(soon.getDate()) + 'T' + pad(soon.getHours()) + ':' + pad(soon.getMinutes());
+      // Default to the first common start time at least an hour away, so a
+      // poster usually only has to confirm or make one tap.
+      when.value = toLocalInputValue(defaultStart(new Date()));
+      attachWhenPicks(when);
 
       function sync() {
-        post.disabled = !(where.value.trim() && when.value);
+        var start = parseWhen(when.value);
+        post.disabled = !(where.value.trim() && start && !isPastStart(start));
       }
       [where, when].forEach(function (el) {
         el.addEventListener('input', sync);
