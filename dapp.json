@@ -120,7 +120,31 @@
       "path": "/#run/900001",
       "expectSelector": "#more-btn[aria-label*='reminders']",
       "visual": true,
-      "impact": ["public/index.html", "server.js"]
+      "impact": [
+        "public/index.html",
+        "server.js"
+      ]
+    },
+    {
+      "id": "kudos.past-run",
+      "name": "Past run shows Kudos count",
+      "path": "/#tab-past",
+      "expectSelector": "#screen-home .kudos-btn",
+      "visual": true,
+      "impact": [
+        "public/index.html",
+        "server.js"
+      ]
+    },
+    {
+      "name": "Past run detail shows Kudos button",
+      "path": "/#run/900003",
+      "expectSelector": "#kudos-btn"
+    },
+    {
+      "name": "Past run detail shows the kudos count",
+      "path": "/#run/900003",
+      "expectText": "3"
     }
   ],
   "visibility": {

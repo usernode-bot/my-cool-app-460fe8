@@ -134,6 +134,12 @@ const RUN_SELECT = `
            SELECT 1 FROM run_attendees a
            WHERE a.run_id = r.id AND a.user_id = $1
          ) AS joined,
+         (SELECT COUNT(*) FROM run_kudos k WHERE k.run_id = r.id)::int
+           AS kudos_count,
+         EXISTS (
+           SELECT 1 FROM run_kudos k
+           WHERE k.run_id = r.id AND k.user_id = $1
+         ) AS kudos_given,
          (r.organizer_id = $1) AS is_organizer,
          COALESCE((
            SELECT array_agg(p.username ORDER BY p.ord)
@@ -488,6 +494,53 @@ app.delete('/api/runs/:id', async (req, res) => {
   }
 });
 
+/* ── Kudos API ───────────────────────────────────────────────────────
+ * One kudos per member per run, and only once the run is over: a tap
+ * writes the (run, user) pair, a second tap removes it, and the response
+ * always reports the fresh count plus whether the caller's own row is
+ * present, so the button renders from one answer.
+ * ──────────────────────────────────────────────────────────────────── */
+
+app.post('/api/runs/:id/kudos', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad run id' });
+  try {
+    const { rows } = await pool.query(`SELECT starts_at FROM runs WHERE id = $1`, [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Run not found' });
+    if (new Date(rows[0].starts_at).getTime() >= Date.now()) {
+      return res.status(409).json({ error: 'Runs can only be kudosed once they are done.' });
+    }
+    const existing = await pool.query(
+      `SELECT 1 FROM run_kudos WHERE run_id = $1 AND user_id = $2`,
+      [id, req.user.id]
+    );
+    if (existing.rows.length) {
+      await pool.query(
+        `DELETE FROM run_kudos WHERE run_id = $1 AND user_id = $2`,
+        [id, req.user.id]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO run_kudos (run_id, user_id) VALUES ($1, $2)
+         ON CONFLICT (run_id, user_id) DO NOTHING`,
+        [id, req.user.id]
+      );
+    }
+    const counts = await pool.query(
+      `SELECT COUNT(*)::int AS count,
+              EXISTS (
+                SELECT 1 FROM run_kudos
+                WHERE run_id = $1 AND user_id = $2
+              ) AS kudos_from_me
+       FROM run_kudos WHERE run_id = $1`,
+      [id, req.user.id]
+    );
+    res.json(counts.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /* ── Reminders API ───────────────────────────────────────────────────
  * One row per (run, attendee) in run_reminders; sent_at is the dedup
  * key. The frontend polls /due, toasts what it gets back, then claims
@@ -787,6 +840,14 @@ async function seedStaging() {
      VALUES (900002, -901)
      ON CONFLICT DO NOTHING`
   );
+  // run_kudos is staging-private too, so the Past tab needs demo rows to
+  // show the count. Old Town loop (900003) is the seeded past run; the
+  // kudos come from the fake demo identities, never the visitor.
+  await pool.query(
+    `INSERT INTO run_kudos (run_id, user_id)
+     VALUES (900003, -901), (900003, -902), (900003, -903)
+     ON CONFLICT (run_id, user_id) DO NOTHING`
+  );
   // The explicit ids above bypass the sequence; push it past them so the
   // first run a tester posts does not collide with a demo row.
   await pool.query(
@@ -856,6 +917,21 @@ async function migrate() {
   `);
   await pool.query(
     `COMMENT ON TABLE run_reminder_optouts IS 'staging:private'`
+  );
+  // Kudos are who-you-are data: one row per (run, member) says that a
+  // specific person tapped Kudos, which a stranger reading a staging
+  // database should not see. The table is staging-private, so staging
+  // seeds its own demo rows in seedStaging().
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS run_kudos (
+      run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (run_id, user_id)
+    )
+  `);
+  await pool.query(
+    `COMMENT ON TABLE run_kudos IS 'staging:private'`
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS runs_starts_at_idx ON runs (starts_at)`
