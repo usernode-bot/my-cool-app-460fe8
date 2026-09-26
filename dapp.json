@@ -26,6 +26,11 @@
       "expectSelector": "#duration-row"
     },
     {
+      "name": "New Run sheet shows the minutes unit beside Duration",
+      "path": "/#new",
+      "expectSelector": "#duration-row .un-unit[data-unit='mins']"
+    },
+    {
       "name": "New Run sheet offers day picks",
       "path": "/#new",
       "expectSelector": "#when-days [data-day='today']"
@@ -265,6 +270,11 @@
       "name": "New Run sheet shows the Distance row",
       "path": "/#new",
       "expectSelector": "#distance-row"
+    },
+    {
+      "name": "New Run sheet shows the km unit beside Distance",
+      "path": "/#new",
+      "expectSelector": "#distance-row .un-unit[data-unit='km']"
     },
     {
       "name": "Run detail shows the Distance row",

@@ -1502,6 +1502,9 @@
       var ROW = 'flex items-center gap-3 rounded-2xl border border-[#e4e4ea] dark:border-[#33333a] px-4 py-4';
       var LABEL = 'shrink-0 w-[64px] text-[17px] text-[#6b6b73] dark:text-[#b0b0b8]';
       var FIELD = 'flex-1 min-w-0 bg-transparent outline-none text-[17px] text-[#111114] dark:text-[#f2f2f7] placeholder:text-[#b6b6bd] dark:placeholder:text-[#6f6f78]';
+      // Explicit unit suffixes beside number fields, so the unit never
+      // depends on the placeholder staying visible.
+      var UNIT = 'un-unit shrink-0 text-[15px] text-[#6b6b73] dark:text-[#b0b0b8]';
 
       wrap.innerHTML =
         '<div class="flex items-center justify-between gap-3">' +
@@ -1534,12 +1537,18 @@
           '<label id="duration-row" class="' + ROW + '">' +
             '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>' +
             '<span class="' + LABEL + '">Duration</span>' +
-            '<input id="f-duration" type="number" min="1" max="600" step="1" inputmode="numeric" autocomplete="off" placeholder="Optional: 45" class="' + FIELD + ' text-right">' +
+            '<span class="flex-1 min-w-0 flex items-center gap-2">' +
+              '<input id="f-duration" type="number" min="1" max="600" step="1" inputmode="numeric" autocomplete="off" placeholder="Optional: 45" class="' + FIELD + ' text-right">' +
+              '<span class="' + UNIT + '" data-unit="mins">mins</span>' +
+            '</span>' +
           '</label>' +
           '<label id="distance-row" class="' + ROW + '">' +
             '<svg class="shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0M4 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>' +
             '<span class="' + LABEL + '">Distance</span>' +
-            '<input id="f-distance" type="number" min="0.5" max="200" step="0.5" inputmode="decimal" autocomplete="off" placeholder="Optional: 5" class="' + FIELD + ' text-right">' +
+            '<span class="flex-1 min-w-0 flex items-center gap-2">' +
+              '<input id="f-distance" type="number" min="0.5" max="200" step="0.5" inputmode="decimal" autocomplete="off" placeholder="Optional: 5" class="' + FIELD + ' text-right">' +
+              '<span class="' + UNIT + '" data-unit="km">km</span>' +
+            '</span>' +
           '</label>' +
           '<button id="type-row" type="button" aria-label="Type" class="' + ROW + ' w-full text-left">' +
             '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01"/></svg>' +
