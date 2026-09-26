@@ -11,3 +11,11 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Static map tiles are fixed-size raster images; line them up inside the
+   overflow-clipped thumbnail instead of letting them stack inline. */
+.staticmap img {
+  position: absolute;
+  top: 0;
+  left: 0;
+}

@@ -386,6 +386,79 @@
     // and a label is only valid if BOTH sides know it.
     var PRESET_TYPES = ['Easy', 'Tempo', 'Long Run', 'Intervals', 'Race'];
 
+    /* ── Meeting-point pin: static map thumbnail ───────────────────── */
+
+    // Keyless OpenStreetMap raster tiles, assembled client-side with slippy
+    // map math. The tile server asks for a descriptive UA and no key, and a
+    // pin is a tiny absolutely positioned SVG rather than a pixel inset.
+    function tileX(lng, z) {
+      return Math.floor((lng + 180) / 360 * Math.pow(2, z));
+    }
+    function tileY(lat, z) {
+      var rad = lat * Math.PI / 180;
+      return Math.floor((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * Math.pow(2, z));
+    }
+    function tileN(lng, z) {
+      return (lng + 180) / 360 * Math.pow(2, z);
+    }
+    function tileNy(lat, z) {
+      var rad = lat * Math.PI / 180;
+      return (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * Math.pow(2, z);
+    }
+
+    // Width and height in px; the zoom choice trades detail for street-name
+    // legibility at both render sizes.
+    function staticMapUrl(lat, lng, w, h) {
+      var z = w >= 400 ? 16 : 15;
+      var anchorN = tileN(lng, z);
+      var anchorY = tileNy(lat, z);
+      var centerTileX = Math.floor(anchorN);
+      var centerTileY = Math.floor(anchorY);
+      var urls = [];
+      var cols = Math.ceil(w / 256);
+      var rows = Math.ceil(h / 256);
+      for (var ty = 0; ty < rows; ty++) {
+        for (var tx = 0; tx < cols; tx++) {
+          urls.push('https://tile.openstreetmap.org/' + z + '/' + (centerTileX + tx) + '/' + (centerTileY + ty) + '.png');
+        }
+      }
+      return { urls: urls, z: z, anchorN: anchorN, anchorY: anchorY, centerTileX: centerTileX, centerTileY: centerTileY };
+    }
+
+    // The thumbnail: a fixed box, every tile absolutely positioned inside
+    // it, and the pin drawn on top. onerror removes a failed tile so a
+    // partial load reads as a smaller live map, never a broken image icon.
+    function staticMapHtml(lat, lng, w, h) {
+      var geo = staticMapUrl(lat, lng, w, h);
+      var cols = Math.ceil(w / 256);
+      var tiles = geo.urls.map(function (u, i) {
+        return '<img class="absolute' + (i === 0 ? ' staticmap-first' : '') + '" src="' + u +
+          '" width="256" height="256" alt="" loading="lazy" ' +
+          'style="left:' + ((i % cols) * 256 - Math.floor(w / 2)) + 'px;top:' + (Math.floor(i / cols) * 256 - Math.floor(h / 2)) + 'px" ' +
+          'onerror="this.style.display=\'none\'">';
+      }).join('');
+      return '<div class="staticmap relative overflow-hidden rounded-2xl bg-[#e5e5ea] dark:bg-[#26262b]" style="width:' + w + 'px;height:' + h + 'px" ' +
+        'data-map="1">' +
+          tiles +
+          '<svg class="absolute z-10 text-[#0a7aff] dark:text-[#5aa9ff] drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)]" width="30" height="42" viewBox="0 0 24 34" fill="currentColor" style="left:' + (w / 2 - 15) + 'px;top:' + (h / 2 - 40) + 'px"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22C24 5.4 18.6 0 12 0zm0 17a5 5 0 110-10 5 5 0 010 10z"/></svg>' +
+          '<span class="absolute bottom-1 right-1.5 z-10 text-[11px] font-medium text-[#3c3c43]/70 dark:text-white/60">&copy; OpenStreetMap contributors</span>' +
+        '</div>';
+    }
+
+    // Nominatim, OpenStreetMap's keyless geocoder. A short UA is asked for
+    // but browsers forbid setting it, so the request goes out as-is; the
+    // one-line result is enough to place a meeting pin.
+    function geocode(query) {
+      var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' +
+        encodeURIComponent(query);
+      return fetch(url, { headers: { 'Accept': 'application/json' } })
+        .then(function (res) { if (!res.ok) throw new Error('geocode failed'); return res.json(); })
+        .then(function (rows) {
+          if (!rows || !rows.length) return null;
+          return { lat: parseFloat(rows[0].lat), lng: parseFloat(rows[0].lon) };
+        });
+    }
+
     var state = {
       tab: 'upcoming',
       runs: [],
@@ -840,6 +913,20 @@
         ? '<img id="detail-photo" src="' + esc(run.photo_url) + '" alt="" class="w-full aspect-[16/9] rounded-2xl object-cover">'
         : '';
 
+      // The meeting point sits between When and Going, per the request, and
+      // is omitted entirely when the run has none. The thumbnail renders at
+      // 320px in this stack, so the same zoom that serves the sheet serves it.
+      var meeting = (run.meeting_point && run.meeting_lat != null && run.meeting_lng != null)
+        ? '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
+            '<div class="flex items-center gap-3 px-4 py-4">' +
+              '<svg class="shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
+              '<span class="shrink-0 text-[19px] font-medium">Meeting point</span>' +
+              '<span class="ml-auto min-w-0 text-[19px] text-right text-[#8e8e93] dark:text-[#98989f]">' + esc(run.meeting_point) + '</span>' +
+            '</div>' +
+            '<div class="p-3 flex justify-center">' + staticMapHtml(run.meeting_lat, run.meeting_lng, 320, 160) + '</div>' +
+          '</div>'
+        : '';
+
       var summary =
         '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl p-4">' +
           '<div class="flex gap-3">' + mediaHtml(run, 'lg') +
@@ -925,7 +1012,7 @@
             ? 'You are organizing this run. Cancel it from the menu if plans change.'
             : 'Join to be counted as going. You can leave anytime.') + '</p>';
 
-      return banner + summary + facts + (isPast ? kudosCard : '') + going + footnote;
+      return banner + summary + facts + meeting + (isPast ? kudosCard : '') + going + footnote;
     }
 
     function renderDetail() {
@@ -1357,6 +1444,16 @@
             '<span class="' + LABEL + '">When</span>' +
             '<input id="f-when" type="datetime-local" required aria-label="Date and time" class="' + FIELD + ' text-right">' +
           '</div>' +
+          '<label id="meeting-row" data-map="0" class="' + ROW + ' flex-col items-stretch gap-2">' +
+            '<span class="flex items-center gap-3">' +
+              '<svg class="shrink-0 text-[#23a455] dark:text-[#4ed07f]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
+              '<span class="' + LABEL + '">Meet at</span>' +
+              '<input id="f-meeting" type="text" maxlength="120" autocomplete="off" placeholder="Optional: main gate, fountain" class="' + FIELD + '">' +
+            '</span>' +
+            '<span id="meeting-hint" class="hidden pl-[34px] text-[14px] text-[#b6b6bd] dark:text-[#6f6f78]">Keep typing to search the map</span>' +
+            '<span id="meeting-status" class="hidden pl-[34px] text-[14px] text-[#8e8e93] dark:text-[#98989f]"></span>' +
+            '<span id="meeting-thumb" class="hidden px-0 pt-1"></span>' +
+          '</label>' +
           '<label id="duration-row" class="' + ROW + '">' +
             '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>' +
             '<span class="' + LABEL + '">Duration</span>' +
@@ -1407,10 +1504,75 @@
       var when = contentEl.querySelector('#f-when');
       var duration = contentEl.querySelector('#f-duration');
       var note = contentEl.querySelector('#f-note');
+      var meetingRow = contentEl.querySelector('#meeting-row');
+      var meetingInput = contentEl.querySelector('#f-meeting');
+      var meetingHint = contentEl.querySelector('#meeting-hint');
+      var meetingStatus = contentEl.querySelector('#meeting-status');
+      var meetingThumb = contentEl.querySelector('#meeting-thumb');
       var post = contentEl.querySelector('#post-run-btn');
       var typeRow = contentEl.querySelector('#type-row');
       var typeValueEl = contentEl.querySelector('#type-value');
       var typeValue = '';
+      var meetingPin = null; // { lat, lng } once the geocoder has answered
+      var meetingSeq = 0;
+      var meetingTimer = null;
+
+      // Every state change lands here: what the hint says, whether the
+      // thumbnail shows, and what data-map advertises to the checks.
+      function setMeetingPin(pin) {
+        meetingPin = pin;
+        meetingRow.setAttribute('data-map', pin ? '1' : '0');
+        meetingThumb.innerHTML = '';
+        meetingThumb.classList.toggle('hidden', !pin);
+        if (pin) {
+          meetingThumb.innerHTML = staticMapHtml(pin.lat, pin.lng, 264, 120);
+        }
+      }
+
+      function setMeetingStatus(text) {
+        meetingStatus.textContent = text || '';
+        meetingStatus.classList.toggle('hidden', !text);
+        if (text) meetingHint.classList.add('hidden');
+      }
+
+      function setMeetingHint(text) {
+        meetingHint.textContent = text || '';
+        meetingHint.classList.toggle('hidden', !text);
+        if (text) meetingStatus.classList.add('hidden');
+      }
+
+      // Debounced: one lookup per pause in typing, never per keystroke.
+      function scheduleMeetingLookup() {
+        meetingSeq += 1;
+        var seq = meetingSeq;
+        setMeetingPin(null);
+        setMeetingStatus('');
+        var text = meetingInput.value.trim();
+        if (!text) { setMeetingHint('Keep typing to search the map'); return; }
+        setMeetingHint('');
+        setMeetingStatus('Searching the map...');
+        if (meetingTimer) clearTimeout(meetingTimer);
+        meetingTimer = setTimeout(function () {
+          if (seq !== meetingSeq) return;
+          geocode(text).then(function (pin) {
+            if (seq !== meetingSeq) return;
+            if (pin) {
+              setMeetingPin(pin);
+              setMeetingStatus('');
+            } else {
+              setMeetingPin(null);
+              setMeetingStatus('No map match. The meeting point will be saved without a map.');
+            }
+          }).catch(function () {
+            if (seq !== meetingSeq) return;
+            setMeetingPin(null);
+            setMeetingStatus('The map could not be reached. The meeting point will be saved without a map.');
+          });
+        }, 600);
+      }
+
+      meetingInput.addEventListener('input', scheduleMeetingLookup);
+      meetingInput.addEventListener('change', scheduleMeetingLookup);
 
       // The chosen label. Empty means "no type", which stays valid: the
       // server stores NULL and every existing screen renders unchanged.
@@ -1608,6 +1770,9 @@
             note: note.value.trim(),
             starts_at: startsAt.toISOString(),
             type: typeValue,
+            meeting_point: meetingInput.value.trim() || undefined,
+            meeting_lat: meetingPin ? meetingPin.lat : undefined,
+            meeting_lng: meetingPin ? meetingPin.lng : undefined,
             duration_minutes: durationMinutes === null ? undefined : durationMinutes,
             photo_url: photo ? photo.url : undefined,
             photo_file_id: photo ? photo.id : undefined,
