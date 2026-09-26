@@ -21,9 +21,19 @@
       "expectSelector": "#type-row"
     },
     {
+      "name": "New Run sheet shows the Duration row",
+      "path": "/#new",
+      "expectSelector": "#duration-row"
+    },
+    {
       "name": "Run type renders on the board",
       "path": "/",
       "expectText": "Staging demo: Trail"
+    },
+    {
+      "name": "Duration renders on the board",
+      "path": "/",
+      "expectText": "30 min"
     },
     {
       "name": "Run detail shows the Type row",
@@ -37,10 +47,32 @@
       "expectSelector": "#detail-body [data-type='0']"
     },
     {
+      "name": "Run detail shows the Duration row",
+      "path": "/#run/900001",
+      "expectSelector": "#detail-body [data-duration='1']",
+      "expectText": "30 min"
+    },
+    {
+      "name": "Durationless run detail keeps its facts unchanged",
+      "path": "/#run/900003",
+      "expectSelector": "#detail-body [data-duration='0']"
+    },
+    {
       "id": "new-run.type-row",
       "name": "New Run sheet carries the Type row",
       "path": "/#new",
       "expectSelector": "#type-row",
+      "visual": true,
+      "impact": [
+        "public/**",
+        "server.js"
+      ]
+    },
+    {
+      "id": "new-run.duration-row",
+      "name": "New Run sheet carries the Duration row",
+      "path": "/#new",
+      "expectSelector": "#duration-row",
       "visual": true,
       "impact": [
         "public/**",
