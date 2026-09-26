@@ -243,12 +243,12 @@
     /* Re-theme the kit to Run Club's blue. Physics and geometry stay the
        kit's; only the color tokens are ours. */
     :root {
-      --un-accent: #0a7aff;
+      --un-accent: #0a68e0;
       --un-accent-contrast: #ffffff;
       --un-group-bg: #ffffff;
       --un-sheet-bg: #ffffff;
       --un-hairline: #ececf0;
-      --un-muted: #8e8e93;
+      --un-muted: #62626a;
       --un-radius-card: 16px;
     }
     /* Same tokens for the dark skin. The kit ships its own `.dark` values,
@@ -263,7 +263,7 @@
       --un-popover-bg: #26262b;
       --un-navbar-bg: rgba(18, 18, 22, 0.8);
       --un-hairline: #2c2c31;
-      --un-muted: #98989f;
+      --un-muted: #b0b0b8;
       --un-switch-track-off: #39393d;
       --un-action-neutral: #3a3a42;
       --un-backdrop: rgba(0, 0, 0, 0.55);
@@ -286,8 +286,8 @@
     }
     input[type="date"]::-webkit-calendar-picker-indicator,
     input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.35; }
-    input[type="date"]:invalid, input[type="time"]:invalid { color: #b6b6bd; }
-    .dark input[type="date"]:invalid, .dark input[type="time"]:invalid { color: #6f6f78; }
+    input[type="date"]:invalid, input[type="time"]:invalid { color: #65656c; }
+    .dark input[type="date"]:invalid, .dark input[type="time"]:invalid { color: #b0b0b8; }
     .dark input[type="date"]::-webkit-calendar-picker-indicator,
     .dark input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.55; }
   </style>
@@ -322,29 +322,29 @@
         <button id="tab-upcoming" type="button" data-tab="upcoming"
           class="rounded-[11px] py-2.5 text-[17px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]">Upcoming</button>
         <button id="tab-past" type="button" data-tab="past"
-          class="rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">Past</button>
+          class="rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none">Past</button>
       </div>
 
       <div class="mt-6 mb-3 px-1 flex items-center justify-between gap-3">
-        <h2 id="list-heading" class="text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93] dark:text-[#98989f]">UPCOMING RUNS</h2>
+        <h2 id="list-heading" class="text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">UPCOMING RUNS</h2>
         <div id="time-format" role="group" aria-label="Time format"
           class="shrink-0 flex items-center gap-0.5 p-0.5 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[10px]">
           <button id="tf-auto" type="button" data-format="auto" aria-pressed="true" title="Follows your language"
             class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]">Auto</button>
           <button id="tf-12" type="button" data-format="12" aria-pressed="false"
-            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">AM/PM</button>
+            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none">AM/PM</button>
           <button id="tf-24" type="button" data-format="24" aria-pressed="false"
-            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">24h</button>
+            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none">24h</button>
         </div>
       </div>
       <div id="dist-filter" role="group" aria-label="Filter by distance"
         class="mt-4 mb-3 flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
         <button id="dist-5k" type="button" data-dist="5k" aria-pressed="false"
-          class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]">5K</button>
+          class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">5K</button>
         <button id="dist-10k" type="button" data-dist="10k" aria-pressed="false"
-          class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]">10K</button>
+          class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">10K</button>
         <button id="dist-half" type="button" data-dist="half" aria-pressed="false"
-          class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]">Half</button>
+          class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">Half</button>
       </div>
       <div id="run-list" class="space-y-3"></div>
     </section>
@@ -449,8 +449,8 @@
       return '<div class="staticmap relative overflow-hidden rounded-2xl bg-[#e5e5ea] dark:bg-[#26262b]" style="width:' + w + 'px;height:' + h + 'px" ' +
         'data-map="1">' +
           tiles +
-          '<svg class="absolute z-10 text-[#0a7aff] dark:text-[#5aa9ff] drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)]" width="30" height="42" viewBox="0 0 24 34" fill="currentColor" style="left:' + (w / 2 - 15) + 'px;top:' + (h / 2 - 40) + 'px"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22C24 5.4 18.6 0 12 0zm0 17a5 5 0 110-10 5 5 0 010 10z"/></svg>' +
-          '<span class="absolute bottom-1 right-1.5 z-10 text-[11px] font-medium text-[#3c3c43]/70 dark:text-white/60">&copy; OpenStreetMap contributors</span>' +
+          '<svg class="absolute z-10 text-[#0854c0] dark:text-[#6fb4ff] drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)]" width="30" height="42" viewBox="0 0 24 34" fill="currentColor" style="left:' + (w / 2 - 15) + 'px;top:' + (h / 2 - 40) + 'px"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22C24 5.4 18.6 0 12 0zm0 17a5 5 0 110-10 5 5 0 010 10z"/></svg>' +
+          '<span class="absolute bottom-1 right-1.5 z-10 text-[11px] font-medium text-[#29292d] dark:text-white/75">&copy; OpenStreetMap contributors</span>' +
         '</div>';
     }
 
@@ -782,10 +782,10 @@
 
     function badgeHtml(info) {
       if (info.tone === 'today') {
-        return '<span class="px-2 py-0.5 rounded-md bg-[#d7f5de] dark:bg-[#123a1f] text-[#1b8a3d] dark:text-[#5fdd8a] text-[16px] font-semibold">' + esc(info.label) + '</span>';
+        return '<span class="px-2 py-0.5 rounded-md bg-[#d7f5de] dark:bg-[#123a1f] text-[#157a33] dark:text-[#5fdd8a] text-[16px] font-semibold">' + esc(info.label) + '</span>';
       }
       if (info.tone === 'tomorrow') {
-        return '<span class="px-2 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#12243d] text-[#0a7aff] dark:text-[#5aa9ff] text-[16px] font-semibold">' + esc(info.label) + '</span>';
+        return '<span class="px-2 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#12243d] text-[#0854c0] dark:text-[#6fb4ff] text-[16px] font-semibold">' + esc(info.label) + '</span>';
       }
       return '<span class="text-[16px] font-semibold text-[#111114] dark:text-[#f2f2f7]">' + esc(info.label) + '</span>';
     }
@@ -795,11 +795,11 @@
     // Whole-literal class strings: Tailwind's extractor is a regex over
     // this file, so an assembled "bg-[" + hex + "]" would never compile.
     var GLYPHS = [
-      { bg: 'bg-[#dcf5e3] dark:bg-[#12331f]', fg: 'text-[#23a455] dark:text-[#4ed07f]', d: 'M12 3l4 6h-2.5l3 5H14l3 5H7l3-5H7.5l3-5H8l4-6zM12 19v2' },
-      { bg: 'bg-[#dbeafe] dark:bg-[#12243d]', fg: 'text-[#2b7fff] dark:text-[#6fb4ff]', d: 'M3 8c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 13c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 18c2-2 4-2 6 0s4 2 6 0 4-2 6 0' },
-      { bg: 'bg-[#ede4ff] dark:bg-[#241a3d]', fg: 'text-[#8b5cf6] dark:text-[#b494ff]', d: 'M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z' },
-      { bg: 'bg-[#ffe8d5] dark:bg-[#3a2513]', fg: 'text-[#f97316] dark:text-[#ffa257]', d: 'M12 5c5 0 9 3.1 9 7s-4 7-9 7-9-3.1-9-7 4-7 9-7zm0 4c2.2 0 4 1.3 4 3s-1.8 3-4 3-4-1.3-4-3 1.8-3 4-3z' },
-      { bg: 'bg-[#ffe1ee] dark:bg-[#3a1526]', fg: 'text-[#ec4899] dark:text-[#ff7fb8]', d: 'M3 19l6-10 4 6 2.5-4L21 19H3z' },
+      { bg: 'bg-[#dcf5e3] dark:bg-[#12331f]', fg: 'text-[#1d8544] dark:text-[#4ed07f]', d: 'M12 3l4 6h-2.5l3 5H14l3 5H7l3-5H7.5l3-5H8l4-6zM12 19v2' },
+      { bg: 'bg-[#dbeafe] dark:bg-[#12243d]', fg: 'text-[#0854c0] dark:text-[#6fb4ff]', d: 'M3 8c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 13c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 18c2-2 4-2 6 0s4 2 6 0 4-2 6 0' },
+      { bg: 'bg-[#ede4ff] dark:bg-[#241a3d]', fg: 'text-[#5b2ca8] dark:text-[#b494ff]', d: 'M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z' },
+      { bg: 'bg-[#ffe8d5] dark:bg-[#3a2513]', fg: 'text-[#c74f00] dark:text-[#ffa257]', d: 'M12 5c5 0 9 3.1 9 7s-4 7-9 7-9-3.1-9-7 4-7 9-7zm0 4c2.2 0 4 1.3 4 3s-1.8 3-4 3-4-1.3-4-3 1.8-3 4-3z' },
+      { bg: 'bg-[#ffe1ee] dark:bg-[#3a1526]', fg: 'text-[#d0236a] dark:text-[#ff7fb8]', d: 'M3 19l6-10 4 6 2.5-4L21 19H3z' },
     ];
 
     function glyphHtml(location, size) {
@@ -825,8 +825,8 @@
     // The platform exposes usernames, not profile photos, so an initial on
     // a stable color stands in for one.
     var AVATAR_TONES = [
-      'bg-[#f97316]', 'bg-[#0a7aff]', 'bg-[#22c55e]',
-      'bg-[#a855f7]', 'bg-[#ec4899]', 'bg-[#14b8a6]',
+      'bg-[#c2540a]', 'bg-[#0a68e0]', 'bg-[#15803d]',
+      'bg-[#9333ea]', 'bg-[#d6246f]', 'bg-[#0f766e]',
     ];
 
     function avatarHtml(username, size, ring) {
@@ -854,7 +854,7 @@
       var info = dayInfo(when);
       var count = run.attendee_count || 0;
       var note = run.note
-        ? '<p class="mt-1 text-[17px] text-[#8e8e93] dark:text-[#98989f] truncate">' + esc(run.note) + '</p>'
+        ? '<p class="mt-1 text-[17px] text-[#62626a] dark:text-[#b0b0b8] truncate">' + esc(run.note) + '</p>'
         : '';
 
       // A finished run trades the Join button for Kudos: the pill shows
@@ -865,8 +865,8 @@
       if (past) {
         var mine = run.kudos_from_me;
         var kudosCls = mine
-          ? 'kudos-btn shrink-0 px-4 py-2 rounded-full bg-[#0a7aff] text-white text-[15px] font-semibold'
-          : 'kudos-btn shrink-0 px-4 py-2 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] text-[15px] font-semibold';
+          ? 'kudos-btn shrink-0 px-4 py-2 rounded-full bg-[#0a68e0] text-white text-[15px] font-semibold'
+          : 'kudos-btn shrink-0 px-4 py-2 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[15px] font-semibold';
         kudos = '<button type="button" class="' + kudosCls + '" data-id="' + run.id + '"' +
           (mine ? ' aria-pressed="true"' : '') +
           (!authHeaders['x-usernode-token'] ? ' disabled title="Sign in to give kudos"' : '') +
@@ -876,8 +876,8 @@
       var action = '';
       if (!past) {
         action = run.joined
-          ? '<button type="button" class="join-btn shrink-0 px-5 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] text-[17px] font-semibold" data-id="' + run.id + '" data-joined="1">Joined</button>'
-          : '<button type="button" class="join-btn shrink-0 px-6 py-2.5 rounded-full bg-[#0a7aff] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0">Join</button>';
+          ? '<button type="button" class="join-btn shrink-0 px-5 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[17px] font-semibold" data-id="' + run.id + '" data-joined="1">Joined</button>'
+          : '<button type="button" class="join-btn shrink-0 px-6 py-2.5 rounded-full bg-[#0a68e0] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0">Join</button>';
       }
 
       return '<div class="run-card un-pressable bg-white dark:bg-[#1c1c20] rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]" role="button" tabindex="0" data-id="' + run.id + '">' +
@@ -885,22 +885,22 @@
           '<div class="min-w-0 flex-1">' +
             '<h3 class="text-[19px] font-bold leading-tight truncate">' + esc(run.location) + '</h3>' +
             '<div class="mt-1.5 flex items-center gap-2">' + badgeHtml(info) +
-              '<span class="run-time text-[17px] text-[#8e8e93] dark:text-[#98989f]">' + esc(fmtTime(when)) + '</span>' +
+              '<span class="run-time text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' + esc(fmtTime(when)) + '</span>' +
               (run.duration_minutes
-                ? '<span class="min-w-0 truncate text-[17px] text-[#8e8e93] dark:text-[#98989f]">' + esc(fmtDuration(run.duration_minutes)) + '</span>'
+                ? '<span class="min-w-0 truncate text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' + esc(fmtDuration(run.duration_minutes)) + '</span>'
                 : '') +
               (run.type_label
-                ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] text-[14px] font-semibold">' + esc(run.type_label) + '</span>'
+                ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[14px] font-semibold">' + esc(run.type_label) + '</span>'
                 : '') +
               (run.distance_km
-                ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#12243d] text-[#0a7aff] dark:text-[#5aa9ff] text-[14px] font-semibold">' + esc(fmtKm(run.distance_km)) + '</span>'
+                ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#12243d] text-[#0854c0] dark:text-[#6fb4ff] text-[14px] font-semibold">' + esc(fmtKm(run.distance_km)) + '</span>'
                 : '') + '</div>' +
             note +
           '</div>' +
         '</div>' +
         '<div class="mt-3.5 flex items-center justify-between gap-3">' +
           '<div class="flex items-center min-w-0">' + clusterHtml(run.preview) +
-            '<span class="ml-2 text-[17px] text-[#8e8e93] dark:text-[#98989f] truncate">' + count + ' ' + (past ? 'went' : 'going') + '</span>' +
+            '<span class="ml-2 text-[17px] text-[#62626a] dark:text-[#b0b0b8] truncate">' + count + ' ' + (past ? 'went' : 'going') + '</span>' +
           '</div>' + action + kudos +
         '</div>' +
       '</div>';
@@ -915,14 +915,14 @@
           })
         : state.runs;
       if (!state.runs.length) {
-        listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">' +
+        listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' +
           (state.tab === 'past'
             ? 'No past runs yet.'
             : 'No upcoming runs. Tap + to post one.') + '</p>';
         return;
       }
       if (!shown.length) {
-        listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">' +
+        listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' +
           'No runs match these distances. Tap a chip again to clear it.</p>';
         return;
       }
@@ -930,7 +930,7 @@
     }
 
     var TAB_ON = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]';
-    var TAB_OFF = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none';
+    var TAB_OFF = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none';
 
     function renderTabs() {
       document.getElementById('tab-upcoming').className =
@@ -960,12 +960,12 @@
       var action = '';
       if (!isPast && !run.is_organizer) {
         action = run.joined
-          ? '<button id="detail-action" type="button" data-action="leave" class="shrink-0 px-6 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8] text-[17px] font-semibold">Leave</button>'
-          : '<button id="detail-action" type="button" data-action="join" class="shrink-0 px-7 py-2.5 rounded-full bg-[#0a7aff] text-white text-[17px] font-semibold">Join</button>';
+          ? '<button id="detail-action" type="button" data-action="leave" class="shrink-0 px-6 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[17px] font-semibold">Leave</button>'
+          : '<button id="detail-action" type="button" data-action="join" class="shrink-0 px-7 py-2.5 rounded-full bg-[#0a68e0] text-white text-[17px] font-semibold">Join</button>';
       }
 
       var note = run.note
-        ? '<p class="mt-1 text-[17px] text-[#8e8e93] dark:text-[#98989f]">' + esc(run.note) + '</p>'
+        ? '<p class="mt-1 text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' + esc(run.note) + '</p>'
         : '';
 
       // Only rendered when the run has a photo; contributes nothing to the
@@ -980,9 +980,9 @@
       var meeting = (run.meeting_point && run.meeting_lat != null && run.meeting_lng != null)
         ? '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
             '<div class="flex items-center gap-3 px-4 py-4">' +
-              '<svg class="shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
+              '<svg class="shrink-0 text-[#0854c0] dark:text-[#6fb4ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
               '<span class="shrink-0 text-[19px] font-medium">Meeting point</span>' +
-              '<span class="ml-auto min-w-0 text-[19px] text-right text-[#8e8e93] dark:text-[#98989f]">' + esc(run.meeting_point) + '</span>' +
+              '<span class="ml-auto min-w-0 text-[19px] text-right text-[#62626a] dark:text-[#b0b0b8]">' + esc(run.meeting_point) + '</span>' +
             '</div>' +
             '<div class="p-3 flex justify-center">' + staticMapHtml(run.meeting_lat, run.meeting_lng, 320, 160) + '</div>' +
           '</div>'
@@ -993,14 +993,14 @@
           '<div class="flex gap-3">' + mediaHtml(run, 'lg') +
             '<div class="min-w-0 flex-1">' +
               '<h2 class="text-[19px] font-bold leading-tight">' + esc(run.location) + '</h2>' +
-              '<p class="mt-1 text-[17px] font-semibold text-[#0a7aff] dark:text-[#5aa9ff]">' + esc(info.label) + ' · ' +
+              '<p class="mt-1 text-[17px] font-semibold text-[#0854c0] dark:text-[#6fb4ff]">' + esc(info.label) + ' · ' +
                 '<span class="run-time">' + esc(fmtTime(when)) + '</span></p>' +
               note +
             '</div>' +
           '</div>' +
           '<div class="mt-4 pt-4 border-t border-[#ececf0] dark:border-[#2c2c31] flex items-center justify-between gap-3">' +
             '<div class="flex items-center gap-3 min-w-0">' + avatarHtml(run.organizer_username, 'lg') +
-              '<span class="min-w-0 text-[17px] leading-snug text-[#8e8e93] dark:text-[#98989f] break-words">Organized by ' + esc(run.organizer_username) + '</span>' +
+              '<span class="min-w-0 text-[17px] leading-snug text-[#62626a] dark:text-[#b0b0b8] break-words">Organized by ' + esc(run.organizer_username) + '</span>' +
             '</div>' + action +
           '</div>' +
         '</div>';
@@ -1009,9 +1009,9 @@
       // off; the short ones stay on a single right-aligned line.
       function infoRow(iconPath, label, value, blue, wrap) {
         return '<div class="flex items-center gap-3 px-4 py-4">' +
-          '<svg class="shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="' + iconPath + '"/></svg>' +
+          '<svg class="shrink-0 text-[#0854c0] dark:text-[#6fb4ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="' + iconPath + '"/></svg>' +
           '<span class="shrink-0 text-[19px] font-medium">' + esc(label) + '</span>' +
-          '<span class="ml-auto min-w-0 text-[19px] text-right ' + (wrap ? '' : 'truncate ') + (blue ? 'text-[#0a7aff] dark:text-[#5aa9ff] font-medium' : 'text-[#8e8e93] dark:text-[#98989f]') + '">' + esc(value) + '</span>' +
+          '<span class="ml-auto min-w-0 text-[19px] text-right ' + (wrap ? '' : 'truncate ') + (blue ? 'text-[#0854c0] dark:text-[#6fb4ff] font-medium' : 'text-[#62626a] dark:text-[#b0b0b8]') + '">' + esc(value) + '</span>' +
         '</div>';
       }
 
@@ -1041,7 +1041,7 @@
         kudosCard =
           '<button id="kudos-btn" type="button" aria-pressed="' + (kudosOn ? 'true' : 'false') + '" class="w-full flex items-center gap-3 px-4 py-4 rounded-2xl ' +
           (kudosOn
-            ? 'bg-[#0a7aff] text-white text-[19px] font-semibold'
+            ? 'bg-[#0a68e0] text-white text-[19px] font-semibold'
             : 'bg-white dark:bg-[#1c1c20] text-[19px] font-medium') + '">' +
           '<svg class="shrink-0" width="22" height="22" viewBox="0 0 24 24" fill="' + (kudosOn ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-9.3-9.1C1.4 7.7 3.6 4.5 6.9 4.5c2 0 3.6 1.1 4.4 2.7.8-1.6 2.4-2.7 4.4-2.7 3.3 0 5.5 3.2 2.2 8.4C16.4 15.4 12 20 12 20z"/></svg>' +
           '<span>Kudos</span>' +
@@ -1051,7 +1051,7 @@
 
       var rows = (attendees || []).map(function (a) {
         var badge = a.is_organizer
-          ? '<span class="px-2 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#12243d] text-[#0a7aff] dark:text-[#5aa9ff] text-[14px] font-semibold">Organizer</span>'
+          ? '<span class="px-2 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#12243d] text-[#0854c0] dark:text-[#6fb4ff] text-[14px] font-semibold">Organizer</span>'
           : '';
         return '<div class="flex items-center gap-3 px-4 py-3.5">' +
           avatarHtml(a.username, 'lg') +
@@ -1061,14 +1061,14 @@
       }).join('');
 
       var going = '<div>' +
-        '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93] dark:text-[#98989f]">WHO\'S GOING</h3>' +
+        '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">WHO\'S GOING</h3>' +
         (rows
           ? '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' + rows + '</div>'
-          : '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl px-4 py-8 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">Nobody has joined yet.</div>') +
+          : '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl px-4 py-8 text-center text-[17px] text-[#62626a] dark:text-[#b0b0b8]">Nobody has joined yet.</div>') +
       '</div>';
 
-      var footnote = '<p class="flex items-start gap-2 px-1 pb-2 text-[15px] leading-snug text-[#8e8e93] dark:text-[#98989f]">' +
-        '<svg class="mt-0.5 shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.1"/></svg>' +
+      var footnote = '<p class="flex items-start gap-2 px-1 pb-2 text-[15px] leading-snug text-[#62626a] dark:text-[#b0b0b8]">' +
+        '<svg class="mt-0.5 shrink-0 text-[#0854c0] dark:text-[#6fb4ff]" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.1"/></svg>' +
         (isPast
           ? 'This run has already happened.'
           : run.is_organizer
@@ -1092,7 +1092,7 @@
 
     // Whole-literal class strings, same reason as the tab states above.
     var TF_ON = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]';
-    var TF_OFF = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none';
+    var TF_OFF = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none';
 
     function renderTimeFormat() {
       ['auto', '12', '24'].forEach(function (value) {
@@ -1218,8 +1218,8 @@
     }
 
     // Whole-literal class strings, same reason as the tab states above.
-    var CHIP_ON = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#0a7aff] text-white';
-    var CHIP_OFF = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]';
+    var CHIP_ON = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#0a68e0] text-white';
+    var CHIP_OFF = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]';
 
     function renderDistFilter() {
       ['5k', '10k', 'half'].forEach(function (id) {
@@ -1311,7 +1311,7 @@
     // assembled one. ON matches the Tomorrow badge on the list.
     var PICK_BASE = 'shrink-0 rounded-full border px-3.5 py-2 text-[15px] ';
     var PICK_CLASS = {
-      on: PICK_BASE + 'bg-[#dbeafe] dark:bg-[#12243d] text-[#0a7aff] dark:text-[#5aa9ff] border-transparent font-semibold',
+      on: PICK_BASE + 'bg-[#dbeafe] dark:bg-[#12243d] text-[#0854c0] dark:text-[#6fb4ff] border-transparent font-semibold',
       off: PICK_BASE + 'border-[#e4e4ea] dark:border-[#33333a] text-[#111114] dark:text-[#f2f2f7]',
       disabled: PICK_BASE + 'border-[#e4e4ea] dark:border-[#33333a] text-[#111114] dark:text-[#f2f2f7] opacity-40',
     };
@@ -1470,7 +1470,7 @@
 
         if (!d) {
           summary.removeAttribute('data-past');
-          summary.innerHTML = '<div class="text-[15px] text-[#8e8e93] dark:text-[#98989f]">Pick a date and time.</div>';
+          summary.innerHTML = '<div class="text-[15px] text-[#62626a] dark:text-[#b0b0b8]">Pick a date and time.</div>';
           return;
         }
         var past = isPastStart(d);
@@ -1485,8 +1485,8 @@
             esc(dayInfo(d).label) + ' · <span class="run-time">' + esc(fmtTime(d)) + '</span>' +
           '</div>' +
           (past
-            ? '<div class="text-[15px] text-[#ff3b30] dark:text-[#ff6961]">That time has passed. Pick a later one.</div>'
-            : '<div class="text-[15px] text-[#8e8e93] dark:text-[#98989f]">' + esc(full) + '</div>');
+            ? '<div class="text-[15px] text-[#d70015] dark:text-[#ff6961]">That time has passed. Pick a later one.</div>'
+            : '<div class="text-[15px] text-[#62626a] dark:text-[#b0b0b8]">' + esc(full) + '</div>');
       }
 
       when.addEventListener('input', render);
@@ -1500,60 +1500,60 @@
       var wrap = document.createElement('div');
       wrap.className = 'pb-1';
       var ROW = 'flex items-center gap-3 rounded-2xl border border-[#e4e4ea] dark:border-[#33333a] px-4 py-4';
-      var LABEL = 'shrink-0 w-[64px] text-[17px] text-[#6b6b73] dark:text-[#b0b0b8]';
-      var FIELD = 'flex-1 min-w-0 bg-transparent outline-none text-[17px] text-[#111114] dark:text-[#f2f2f7] placeholder:text-[#b6b6bd] dark:placeholder:text-[#6f6f78]';
+      var LABEL = 'shrink-0 w-[64px] text-[17px] text-[#57575e] dark:text-[#b0b0b8]';
+      var FIELD = 'flex-1 min-w-0 bg-transparent outline-none text-[17px] text-[#111114] dark:text-[#f2f2f7] placeholder:text-[#65656c] dark:placeholder:text-[#b0b0b8]';
 
       wrap.innerHTML =
         '<div class="flex items-center justify-between gap-3">' +
           '<h2 class="text-[30px] font-extrabold tracking-tight">New Run</h2>' +
-          '<button id="sheet-close" type="button" aria-label="Close" class="un-touch-target shrink-0 w-9 h-9 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] flex items-center justify-center">' +
+          '<button id="sheet-close" type="button" aria-label="Close" class="un-touch-target shrink-0 w-9 h-9 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] flex items-center justify-center">' +
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
           '</button>' +
         '</div>' +
         '<div class="mt-5 space-y-3">' +
           '<label class="' + ROW + '">' +
-            '<svg class="shrink-0 text-[#23a455] dark:text-[#4ed07f]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
+            '<svg class="shrink-0 text-[#1d8544] dark:text-[#4ed07f]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
             '<span class="' + LABEL + '">Where</span>' +
             '<input id="f-where" type="text" maxlength="120" autocomplete="off" placeholder="e.g. Riverside Park" class="' + FIELD + '">' +
           '</label>' +
           '<div class="' + ROW + '">' +
-            '<svg class="shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4"/></svg>' +
+            '<svg class="shrink-0 text-[#0854c0] dark:text-[#6fb4ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4"/></svg>' +
             '<span class="' + LABEL + '">When</span>' +
             '<input id="f-when" type="datetime-local" required aria-label="Date and time" class="' + FIELD + ' text-right">' +
           '</div>' +
           '<label id="meeting-row" data-map="0" class="' + ROW + ' flex-col items-stretch gap-2">' +
             '<span class="flex items-center gap-3">' +
-              '<svg class="shrink-0 text-[#23a455] dark:text-[#4ed07f]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
+              '<svg class="shrink-0 text-[#1d8544] dark:text-[#4ed07f]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
               '<span class="' + LABEL + '">Meet at</span>' +
               '<input id="f-meeting" type="text" maxlength="120" autocomplete="off" placeholder="Optional: main gate, fountain" class="' + FIELD + '">' +
             '</span>' +
-            '<span id="meeting-hint" class="hidden pl-[34px] text-[14px] text-[#b6b6bd] dark:text-[#6f6f78]">Keep typing to search the map</span>' +
-            '<span id="meeting-status" class="hidden pl-[34px] text-[14px] text-[#8e8e93] dark:text-[#98989f]"></span>' +
+            '<span id="meeting-hint" class="hidden pl-[34px] text-[14px] text-[#65656c] dark:text-[#b0b0b8]">Keep typing to search the map</span>' +
+            '<span id="meeting-status" class="hidden pl-[34px] text-[14px] text-[#62626a] dark:text-[#b0b0b8]"></span>' +
             '<span id="meeting-thumb" class="hidden px-0 pt-1"></span>' +
           '</label>' +
           '<label id="duration-row" class="' + ROW + '">' +
-            '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>' +
+            '<svg class="shrink-0 text-[#5b2ca8] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>' +
             '<span class="' + LABEL + '">Duration</span>' +
             '<input id="f-duration" type="number" min="1" max="600" step="1" inputmode="numeric" autocomplete="off" placeholder="Optional: 45" class="' + FIELD + ' text-right">' +
           '</label>' +
           '<label id="distance-row" class="' + ROW + '">' +
-            '<svg class="shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0M4 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>' +
+            '<svg class="shrink-0 text-[#0854c0] dark:text-[#6fb4ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0M4 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>' +
             '<span class="' + LABEL + '">Distance</span>' +
             '<input id="f-distance" type="number" min="0.5" max="200" step="0.5" inputmode="decimal" autocomplete="off" placeholder="Optional: 5" class="' + FIELD + ' text-right">' +
           '</label>' +
           '<button id="type-row" type="button" aria-label="Type" class="' + ROW + ' w-full text-left">' +
-            '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01"/></svg>' +
+            '<svg class="shrink-0 text-[#5b2ca8] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01"/></svg>' +
             '<span class="' + LABEL + '">Type</span>' +
-            '<span id="type-value" class="min-w-0 flex-1 text-right text-[17px] text-[#b6b6bd] dark:text-[#6f6f78]">Optional</span>' +
+            '<span id="type-value" class="min-w-0 flex-1 text-right text-[17px] text-[#65656c] dark:text-[#b0b0b8]">Optional</span>' +
           '</button>' +
           '<label class="' + ROW + '">' +
-            '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5zM14 3v5h5"/></svg>' +
+            '<svg class="shrink-0 text-[#5b2ca8] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5zM14 3v5h5"/></svg>' +
             '<span class="' + LABEL + '">Note</span>' +
             '<input id="f-note" type="text" maxlength="200" autocomplete="off" placeholder="Optional: easy 5k pace" class="' + FIELD + '">' +
           '</label>' +
           '<div id="photo-row">' +
             '<input id="f-photo-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden">' +
-            '<button id="photo-add-btn" type="button" class="un-pressable w-full h-[100px] rounded-2xl border border-dashed border-[#d4d4db] dark:border-[#3a3a42] flex flex-col items-center justify-center gap-1.5 text-[#8e8e93] dark:text-[#98989f]">' +
+            '<button id="photo-add-btn" type="button" class="un-pressable w-full h-[100px] rounded-2xl border border-dashed border-[#d4d4db] dark:border-[#3a3a42] flex flex-col items-center justify-center gap-1.5 text-[#62626a] dark:text-[#b0b0b8]">' +
               '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l1.8-2.4A1 1 0 019.6 4h4.8a1 1 0 01.8.6L17 7h3a1 1 0 011 1v11a1 1 0 01-1 1H4a1 1 0 01-1-1V8a1 1 0 011-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg>' +
               '<span class="text-[15px] font-medium">Add photo</span>' +
             '</button>' +
@@ -1565,13 +1565,29 @@
             '</div>' +
           '</div>' +
         '</div>' +
-        '<button id="post-run-btn" type="button" disabled class="mt-5 w-full h-[58px] rounded-2xl bg-[#0a7aff] text-white text-[19px] font-semibold disabled:opacity-40">Post run</button>';
+        '<button id="post-run-btn" type="button" disabled class="mt-5 w-full h-[58px] rounded-2xl bg-[#0a68e0] text-white text-[19px] font-semibold disabled:opacity-40">Post run</button>';
 
       return wrap;
     }
 
     function openSheet() {
       if (state.sheet) return;
+      // No hosted kit (local dev without the platform shell, or a build
+      // where native.js failed to load): render the form in place instead
+      // of crashing with an uncaught ReferenceError.
+      if (!(window.unNative && unNative.presentSheet)) {
+        var fallbackEl = buildSheet();
+        document.getElementById('app').appendChild(fallbackEl);
+        state.sheet = {
+          dismiss: function () {
+            fallbackEl.remove();
+            state.sheet = null;
+            if (location.hash === '#new') setHash('');
+          },
+        };
+        wireSheet(fallbackEl, state.sheet);
+        return;
+      }
       var contentEl = buildSheet();
       var handle = unNative.presentSheet({
         contentEl: contentEl,
@@ -1581,7 +1597,10 @@
         },
       });
       state.sheet = handle;
+      wireSheet(contentEl, handle);
+    }
 
+    function wireSheet(contentEl, handle) {
       var where = contentEl.querySelector('#f-where');
       var when = contentEl.querySelector('#f-when');
       var duration = contentEl.querySelector('#f-duration');
@@ -1663,10 +1682,10 @@
         typeValue = v || '';
         if (typeValue) {
           typeValueEl.textContent = typeValue;
-          typeValueEl.className = 'min-w-0 flex-1 text-right text-[17px] text-[#0a7aff] dark:text-[#5aa9ff] font-medium';
+          typeValueEl.className = 'min-w-0 flex-1 text-right text-[17px] text-[#0854c0] dark:text-[#6fb4ff] font-medium';
         } else {
           typeValueEl.textContent = 'Optional';
-          typeValueEl.className = 'min-w-0 flex-1 text-right text-[17px] text-[#b6b6bd] dark:text-[#6f6f78]';
+          typeValueEl.className = 'min-w-0 flex-1 text-right text-[17px] text-[#65656c] dark:text-[#b0b0b8]';
         }
       }
 

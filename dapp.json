@@ -181,6 +181,18 @@
       "expectSelector": "html.dark #app #theme-btn[data-theme-mode='dark'][aria-label='Display mode: Dark']"
     },
     {
+      "id": "a11y.contrast-dark-home",
+      "name": "Home renders the AA contrast palette in dark mode",
+      "path": "/?theme=dark",
+      "expectSelector": "html.dark #screen-home .run-card",
+      "visual": true,
+      "impact": [
+        "public/index.html",
+        "tailwind.config.js",
+        "styles/**"
+      ]
+    },
+    {
       "name": "Run details renders in dark mode",
       "path": "/?theme=dark#run/900001",
       "expectSelector": "html.dark #screen-detail:not(.hidden) #theme-btn-detail[data-theme-mode='dark'][aria-label='Display mode: Dark']"
