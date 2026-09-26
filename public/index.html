@@ -724,6 +724,22 @@
         ? '<p class="mt-1 text-[17px] text-[#8e8e93] dark:text-[#98989f] truncate">' + esc(run.note) + '</p>'
         : '';
 
+      // A finished run trades the Join button for Kudos: the pill shows
+      // the count, and a tap (by a signed-in member) toggles their own
+      // kudos. Rendered disabled for anonymous readers so the control is
+      // visible to the checks, which browse without a token.
+      var kudos = '';
+      if (past) {
+        var mine = run.kudos_from_me;
+        var kudosCls = mine
+          ? 'kudos-btn shrink-0 px-4 py-2 rounded-full bg-[#0a7aff] text-white text-[15px] font-semibold'
+          : 'kudos-btn shrink-0 px-4 py-2 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] text-[15px] font-semibold';
+        kudos = '<button type="button" class="' + kudosCls + '" data-id="' + run.id + '"' +
+          (mine ? ' aria-pressed="true"' : '') +
+          (!authHeaders['x-usernode-token'] ? ' disabled title="Sign in to give kudos"' : '') +
+          '>Kudos ' + (run.kudos_count || 0) + '</button>';
+      }
+
       var action = '';
       if (!past) {
         action = run.joined
@@ -746,7 +762,7 @@
         '<div class="mt-3.5 flex items-center justify-between gap-3">' +
           '<div class="flex items-center min-w-0">' + clusterHtml(run.preview) +
             '<span class="ml-2 text-[17px] text-[#8e8e93] dark:text-[#98989f] truncate">' + count + ' ' + (past ? 'went' : 'going') + '</span>' +
-          '</div>' + action +
+          '</div>' + action + kudos +
         '</div>' +
       '</div>';
     }
@@ -849,6 +865,22 @@
         infoRow(PEOPLE, 'Going', count + (count === 1 ? ' runner' : ' runners'), false) +
       '</div>';
 
+      // Kudos live on finished runs only: a full-width tap target below
+      // the facts, filled when this member has already given theirs.
+      var kudosCard = '';
+      if (isPast) {
+        var kudosOn = !!run.kudos_from_me;
+        kudosCard =
+          '<button id="kudos-btn" type="button" aria-pressed="' + (kudosOn ? 'true' : 'false') + '" class="w-full flex items-center gap-3 px-4 py-4 rounded-2xl ' +
+          (kudosOn
+            ? 'bg-[#0a7aff] text-white text-[19px] font-semibold'
+            : 'bg-white dark:bg-[#1c1c20] text-[19px] font-medium') + '">' +
+          '<svg class="shrink-0" width="22" height="22" viewBox="0 0 24 24" fill="' + (kudosOn ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-9.3-9.1C1.4 7.7 3.6 4.5 6.9 4.5c2 0 3.6 1.1 4.4 2.7.8-1.6 2.4-2.7 4.4-2.7 3.3 0 5.5 3.2 2.2 8.4C16.4 15.4 12 20 12 20z"/></svg>' +
+          '<span>Kudos</span>' +
+          '<span id="kudos-count" class="ml-auto">' + (run.kudos_count || 0) + '</span>' +
+        '</button>';
+      }
+
       var rows = (attendees || []).map(function (a) {
         var badge = a.is_organizer
           ? '<span class="px-2 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#12243d] text-[#0a7aff] dark:text-[#5aa9ff] text-[14px] font-semibold">Organizer</span>'
@@ -875,7 +907,7 @@
             ? 'You are organizing this run. Cancel it from the menu if plans change.'
             : 'Join to be counted as going. You can leave anytime.') + '</p>';
 
-      return banner + summary + facts + going + footnote;
+      return banner + summary + facts + (isPast ? kudosCard : '') + going + footnote;
     }
 
     function renderDetail() {
@@ -1605,6 +1637,26 @@
     }
 
     listEl.addEventListener('click', function (e) {
+      var kudosBtn = e.target.closest('.kudos-btn');
+      if (kudosBtn) {
+        // Same rule as the join buttons: stop the tap so it does not also
+        // navigate into the run detail.
+        e.stopPropagation();
+        if (kudosBtn.disabled) return;
+        kudosBtn.disabled = true;
+        var kid = parseInt(kudosBtn.dataset.id, 10);
+        api('/api/runs/' + kid + '/kudos', { method: 'POST' })
+          .then(function (data) {
+            var run = state.runs.find(function (r) { return r.id === kid; });
+            if (run) {
+              run.kudos_count = data.count;
+              run.kudos_from_me = data.kudos_from_me;
+            }
+            renderList();
+          })
+          .catch(function (err) { kudosBtn.disabled = false; notify(err.message); });
+        return;
+      }
       var join = e.target.closest('.join-btn');
       if (join) {
         // The card underneath is itself a button; stop the tap here so a
@@ -1628,6 +1680,19 @@
     });
 
     detailBodyEl.addEventListener('click', function (e) {
+      var kudosBtn = e.target.closest('#kudos-btn');
+      if (kudosBtn && state.detail) {
+        kudosBtn.disabled = true;
+        var kudosId = state.detail.run.id;
+        api('/api/runs/' + kudosId + '/kudos', { method: 'POST' })
+          .then(function (data) {
+            state.detail.run.kudos_count = data.count;
+            state.detail.run.kudos_from_me = data.kudos_from_me;
+            renderDetail();
+          })
+          .catch(function (err) { kudosBtn.disabled = false; notify(err.message); });
+        return;
+      }
       var btn = e.target.closest('#detail-action');
       if (!btn || !state.detail) return;
       var id = state.detail.run.id;
@@ -1781,6 +1846,17 @@
       }
 
       showScreen('home', 'pop');
+      // A Past-tab deep link for reviewers: the state link opens the board
+      // directly on the finished runs, where Kudos renders.
+      if (h === 'tab-past') {
+        if (state.tab !== 'past') {
+          state.tab = 'past';
+          state.runs = [];
+          renderTabs();
+        }
+        renderList();
+        loadRuns();
+      }
       if (h === 'new') {
         openSheet();
       } else if (state.sheet) {
