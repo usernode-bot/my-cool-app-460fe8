@@ -21,19 +21,19 @@
       "expectText": "staging-demo-maya"
     },
     {
-      "name": "Time format toggle defaults to am/pm",
+      "name": "Time format note is present",
       "path": "/",
-      "expectSelector": "#app[data-time-format='12'] #tf-12[aria-pressed='true']"
+      "expectSelector": "#app #time-format-note"
     },
     {
-      "name": "Home renders 24 hour times",
-      "path": "/?tf=24",
+      "name": "12 hour locale renders am/pm times",
+      "path": "/?locale=en-US",
+      "expectSelector": "#app[data-time-format='12'] .run-time"
+    },
+    {
+      "name": "24 hour locale renders 24 hour times",
+      "path": "/?locale=en-GB",
       "expectSelector": "#app[data-time-format='24'] .run-time"
-    },
-    {
-      "name": "Run details renders 24 hour times",
-      "path": "/?tf=24#run/900001",
-      "expectSelector": "#app[data-time-format='24'] #detail-body .run-time"
     },
     {
       "name": "Run detail shows the seeded photo",

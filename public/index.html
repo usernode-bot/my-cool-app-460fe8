@@ -327,13 +327,8 @@
 
       <div class="mt-6 mb-3 px-1 flex items-center justify-between gap-3">
         <h2 id="list-heading" class="text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93] dark:text-[#98989f]">UPCOMING RUNS</h2>
-        <div id="time-format" role="group" aria-label="Time format"
-          class="shrink-0 flex items-center gap-0.5 p-0.5 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[10px]">
-          <button id="tf-12" type="button" data-format="12" aria-pressed="true"
-            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]">AM/PM</button>
-          <button id="tf-24" type="button" data-format="24" aria-pressed="false"
-            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">24h</button>
-        </div>
+        <span id="time-format-note" class="shrink-0 text-[13px] font-medium text-[#8e8e93] dark:text-[#98989f]"
+          title="Times follow your language settings"></span>
       </div>
       <div id="run-list" class="space-y-3"></div>
     </section>
@@ -351,7 +346,7 @@
         <button id="theme-btn-detail" type="button" class="theme-btn un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center"
           aria-label="Display mode" title="Display mode"></button>
         <button id="more-btn" type="button"
-          aria-label="More options. Contains: Share, time format switch, and cancel or leave"
+          aria-label="More options. Contains: Share and cancel or leave"
           class="un-touch-target w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
             <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
@@ -386,7 +381,6 @@
       screen: 'home',
       sheet: null,
       me: null,          // resolved from the first API response we own
-      timeFormat: '12',  // '12' (am/pm) or '24'; resolved at boot below
     };
 
     /* ── Small helpers ─────────────────────────────────────────────── */
@@ -484,29 +478,41 @@
       }
     }
 
-    var locale = safeLocale(navigator.language);
-    if (window.usernode && usernode.getUserLocale) {
-      usernode.getUserLocale().then(function (r) {
-        // null means "no preference set", not English: keep the device
-        // language in that case.
-        var next = r && r.locale ? safeLocale(r.locale) : undefined;
-        if (next) { locale = next; render(); }
-      }).catch(function () {});
+    var locale = safeLocale(params.get('locale') || navigator.language);
+
+    /* ── Time of day: one helper, locale-driven format ────────── */
+
+    // BCP-47 tags do not carry a clock preference; the locale's CLDR
+    // calendar decides it. Ask Intl what that calendar would emit for a
+    // plain hour: 'numeric' vs '2-digit' is what distinguishes en-US from
+    // en-GB, and it works for any locale the runtime supports, including
+    // ones this app has never heard of.
+    function hourCycleOf(tag) {
+      try {
+        var hour = new Intl.DateTimeFormat(tag || undefined, { hour: 'numeric' })
+          .resolvedOptions().hour;
+        return hour === 'numeric' ? 'h12' : 'h23';
+      } catch (err) {
+        return 'h12';
+      }
     }
 
-    /* ── Time of day: one helper, two formats ──────────────────── */
+    // The format is not a preference: it comes from the locale itself
+    // (en-US renders am/pm, en-GB / de / id render 24 hour), so one locale
+    // lookup feeds both the wording of dates and the shape of the clock.
+    var TIME_CYCLE = hourCycleOf(locale);
 
-    // Every clock time on every screen goes through fmtTime, so the toggle
-    // only has to flip one value. `hourCycle` rather than `hour12`: the
-    // boolean maps to h24 in a few locales, which renders midnight as
-    // "24:00" instead of "00:00".
-    var TIME_FORMATS = {
-      '12': { hour: 'numeric', minute: '2-digit', hourCycle: 'h12' },
-      '24': { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
-    };
-
+    // Every clock time on every screen goes through fmtTime. `hourCycle`
+    // rather than `hour12`: the boolean maps to h24 in a few locales,
+    // which renders midnight as "24:00" instead of "00:00". Passing the
+    // locale alone would still let some engines emit dayPeriod for the
+    // resolved locale, so the derived cycle is pinned explicitly.
     function fmtTime(d) {
-      var opts = TIME_FORMATS[state.timeFormat] || TIME_FORMATS['12'];
+      var opts = {
+        hour: TIME_CYCLE === 'h23' ? '2-digit' : 'numeric',
+        minute: '2-digit',
+        hourCycle: TIME_CYCLE,
+      };
       try {
         return new Intl.DateTimeFormat(locale, opts).format(d);
       } catch (err) {
@@ -514,70 +520,9 @@
         // rejects it, fall back to the boolean rather than dropping the
         // time off the card entirely.
         return new Intl.DateTimeFormat(locale, {
-          hour: opts.hour, minute: opts.minute, hour12: state.timeFormat !== '24',
+          hour: opts.hour, minute: opts.minute, hour12: TIME_CYCLE !== 'h23',
         }).format(d);
       }
-    }
-
-    /* ── Remembering the choice ───────────────────────────── */
-
-    var FORMAT_KEY = 'runclub.timeFormat';
-
-    // The token carries the signed-in username, so the preference can be
-    // namespaced per person on a shared device. This reads the claim
-    // without verifying it, which is fine for picking a storage key and
-    // nothing else. An offline load arrives with no token at all, hence
-    // the shared key below as well.
-    function tokenUsername() {
-      if (!token) return '';
-      try {
-        var part = String(token).split('.')[1];
-        if (!part) return '';
-        var b64 = part.replace(/-/g, '+').replace(/_/g, '/');
-        while (b64.length % 4) b64 += '=';
-        var claims = JSON.parse(atob(b64));
-        return claims && claims.username ? String(claims.username) : '';
-      } catch (err) {
-        return '';
-      }
-    }
-
-    var formatKeys = (function () {
-      var who = tokenUsername();
-      return who ? [FORMAT_KEY + ':' + who, FORMAT_KEY] : [FORMAT_KEY];
-    })();
-
-    // A cross-origin frame can be refused storage outright, so every access
-    // is guarded: the worst case is a choice that does not survive a
-    // reload, never a screen that fails to render.
-    function readFormat() {
-      for (var i = 0; i < formatKeys.length; i++) {
-        try {
-          var v = window.localStorage.getItem(formatKeys[i]);
-          if (v === '12' || v === '24') return v;
-        } catch (err) {
-          return '';
-        }
-      }
-      return '';
-    }
-
-    // Written to the shared key too: an offline boot has no token, so the
-    // per-user key is unreachable there and would otherwise read as
-    // "never chose anything".
-    function writeFormat(value) {
-      try {
-        window.localStorage.setItem(FORMAT_KEY, value);
-        if (formatKeys.length > 1) window.localStorage.setItem(formatKeys[0], value);
-      } catch (err) { /* storage refused: this load still honours the choice */ }
-    }
-
-    function setFormat(value) {
-      if (value !== '12' && value !== '24') return;
-      if (state.timeFormat === value) return;
-      state.timeFormat = value;
-      writeFormat(value);
-      render();
     }
 
     // Today / Tomorrow / Yesterday where they apply, a short date otherwise.
@@ -833,19 +778,17 @@
     }
 
     // Whole-literal class strings, same reason as the tab states above.
-    var TF_ON = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]';
-    var TF_OFF = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none';
-
-    function renderTimeFormat() {
-      ['12', '24'].forEach(function (value) {
-        var btn = document.getElementById('tf-' + value);
-        var on = state.timeFormat === value;
-        btn.className = on ? TF_ON : TF_OFF;
-        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-      });
+    function renderTimeFormatNote() {
+      var el = document.getElementById('time-format-note');
+      if (el) {
+        el.textContent = TIME_CYCLE === 'h23'
+          ? '24 hour times'
+          : 'am/pm times';
+      }
       // Lets an automated check assert which format the screen is actually
       // rendering, without depending on the container's timezone.
-      document.getElementById('app').setAttribute('data-time-format', state.timeFormat);
+      document.getElementById('app').setAttribute('data-time-format',
+        TIME_CYCLE === 'h23' ? '24' : '12');
     }
 
     /* -- Display mode: one icon, three choices --------------------- */
@@ -955,13 +898,6 @@
         }
         return true;
       });
-    }
-
-    function render() {
-      renderTimeFormat();
-      renderTabs();
-      renderList();
-      renderDetail();
     }
 
     /* ── Screen switching ──────────────────────────────────────────── */
@@ -1231,12 +1167,6 @@
       } else if (!isPast && run.joined) {
         items.push({ label: 'Leave run', destructive: true, value: 'leave' });
       }
-      // The detail screen shows a time but has no room for the segmented
-      // control, so the same choice lives here.
-      items.push({
-        label: state.timeFormat === '24' ? 'Show am/pm times' : 'Show 24 hour times',
-        value: 'timeformat',
-      });
       unNative.menu({ anchorEl: e.currentTarget, items: items, cancelLabel: 'Cancel' })
         .then(function (choice) {
           if (!choice) return;
@@ -1251,10 +1181,6 @@
             } else {
               notify('Sharing is not available here.');
             }
-            return;
-          }
-          if (choice.value === 'timeformat') {
-            setFormat(state.timeFormat === '24' ? '12' : '24');
             return;
           }
           if (choice.value === 'leave') {
@@ -1295,11 +1221,6 @@
 
     document.getElementById('back-btn').addEventListener('click', function () {
       setHash('');
-    });
-
-    document.getElementById('time-format').addEventListener('click', function (e) {
-      var btn = e.target.closest('button[data-format]');
-      if (btn) setFormat(btn.dataset.format);
     });
 
     [['tab-upcoming', 'upcoming'], ['tab-past', 'past']].forEach(function (pair) {
@@ -1358,25 +1279,8 @@
 
     /* ── Boot ──────────────────────────────────────────────────────── */
 
-    // Precedence: an explicit ?tf= deep link, then the remembered choice,
-    // then am/pm so nothing changes for anyone who never touches the
-    // toggle. The link is pure view state with no database write, so it is
-    // deliberately not staging-gated: the "before" screenshot is taken
-    // against production. It is also deliberately NOT persisted, so a link
-    // shared for a screenshot cannot quietly re-set the reader's own
-    // choice, and so the default stays the default on the next plain load.
-    (function resolveFormat() {
-      var linked = params.get('tf');
-      if (linked === '12' || linked === '24') {
-        state.timeFormat = linked;
-        return;
-      }
-      var stored = readFormat();
-      if (stored) state.timeFormat = stored;
-    })();
-
     renderTheme();
-    renderTimeFormat();
+    renderTimeFormatNote();
     renderTabs();
     loadRuns().then(route);
 
@@ -1387,6 +1291,35 @@
           : loadRuns();
       }, { content: document.getElementById('app') });
     }
+
+    // Platform locale, preferred over the boot value from ?locale= (which
+    // only exists to keep deep links stable for a viewer who has not yet
+    // signed in there). null means "no preference set", not English: keep
+    // the device language in that case. A mid-session change re-renders
+    // live via the bridge's usernode:locale-changed event.
+    function platformLocaleTag() {
+      if (!window.usernode || !usernode.getUserLocale) return null;
+      return usernode.getUserLocale().then(function (r) {
+        return r && r.locale ? safeLocale(r.locale) : null;
+      }).catch(function () { return null; });
+    }
+
+    function adoptLocale(tag) {
+      if (!tag || tag === locale) return;
+      locale = tag;
+      TIME_CYCLE = hourCycleOf(tag);
+      renderTimeFormatNote();
+      renderTabs();
+      renderList();
+      renderDetail();
+    }
+
+    if (window.usernode && usernode.getUserLocale) {
+      platformLocaleTag().then(adoptLocale);
+    }
+    window.addEventListener('usernode:locale-changed', function (e) {
+      adoptLocale(e && e.detail ? safeLocale(e.detail.locale) : null);
+    });
   })();
   </script>
 </body>
