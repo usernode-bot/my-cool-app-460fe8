@@ -290,13 +290,28 @@ app.delete('/api/run-types/:id', async (req, res) => {
 // yet, soonest first. `past` reads the other way and is capped.
 app.get('/api/runs', async (req, res) => {
   const past = req.query.filter === 'past';
+  const q = String(req.query.q || '').trim();
+  // Board search: a run matches when the query names its organizer or any
+  // member going to it. COALESCE($2, '') = '' short-circuits to TRUE when
+  // no query came in, so an unfiltered board is not emptied by the clause.
+  // ILIKE metacharacters are escaped so "%", "_" and "\" in a name match
+  // literally rather than acting as wildcards.
+  const like = q ? '%' + q.replace(/[\\%_]/g, '\\$&') + '%' : '';
+  const params = [callerId(req), like];
+  const memberMatch = `
+    EXISTS (
+      SELECT 1 FROM run_attendees m
+      WHERE m.run_id = r.id
+        AND (r.organizer_username ILIKE $2 OR m.username ILIKE $2))`;
   try {
     const { rows } = await pool.query(
       RUN_SELECT +
         (past
-          ? ` WHERE r.starts_at < NOW() ORDER BY r.starts_at DESC LIMIT 50`
-          : ` WHERE r.starts_at >= NOW() ORDER BY r.starts_at ASC LIMIT 100`),
-      [callerId(req)]
+          ? ` WHERE r.starts_at < NOW() AND (COALESCE($2, '') = '' OR ` + memberMatch + `)` +
+            ` ORDER BY r.starts_at DESC LIMIT 50`
+          : ` WHERE r.starts_at >= NOW() AND (COALESCE($2, '') = '' OR ` + memberMatch + `)` +
+            ` ORDER BY r.starts_at ASC LIMIT 100`),
+      params
     );
     res.json({ runs: rows });
   } catch (err) {
@@ -721,6 +736,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 // fine — this path only exists for the in-loop check browser.)
 app.get('/tailwind.css', (req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'tailwind.css')));
+// The bridge fetches mark.svg beside itself on load, so it must be
+// reachable on the same rules as the other hosted files.
 ['native.css', 'native.js', 'bridge.js'].forEach((file) => {
   const subPath = file === 'bridge.js'
     ? '/usernode-bridge/v1/bridge.js'
@@ -738,6 +755,10 @@ app.get('/tailwind.css', (req, res) =>
     // the bridge existing or degrades on its own below.
     app.get(subPath, (req, res) => res.type('js').send('/* hosted file not available outside the platform */'));
   }
+});
+app.get('/usernode-bridge/v1/mark.svg', (req, res) => {
+  if (PLATFORM_ORIGIN) return res.redirect(302, PLATFORM_ORIGIN + req.path);
+  res.type('image/svg+xml').send('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>');
 });
 
 app.get('*', (req, res) => {
@@ -793,7 +814,9 @@ const SEED_RUNS = [
     hour: 18,
     minute: 30,
     organizer: [-901, 'staging-demo-maya'],
-    joiners: [[-902, 'staging-demo-ethan'], [-903, 'staging-demo-nina']],
+    // Sasha is a member here only, so a board search for her name filters
+    // the list to this run and can demonstrate the no-match empty state.
+    joiners: [[-904, 'staging-demo-sasha'], [-902, 'staging-demo-ethan'], [-903, 'staging-demo-nina']],
     photoUrl: SEED_PHOTO_URL,
     meeting: 'Staging demo: Main gate, by the fountain',
     meetingLat: 40.8069,
