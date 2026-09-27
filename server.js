@@ -736,6 +736,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 // fine — this path only exists for the in-loop check browser.)
 app.get('/tailwind.css', (req, res) =>
   res.sendFile(path.join(__dirname, 'public', 'tailwind.css')));
+// The bridge fetches mark.svg beside itself on load, so it must be
+// reachable on the same rules as the other hosted files.
 ['native.css', 'native.js', 'bridge.js'].forEach((file) => {
   const subPath = file === 'bridge.js'
     ? '/usernode-bridge/v1/bridge.js'
@@ -753,6 +755,10 @@ app.get('/tailwind.css', (req, res) =>
     // the bridge existing or degrades on its own below.
     app.get(subPath, (req, res) => res.type('js').send('/* hosted file not available outside the platform */'));
   }
+});
+app.get('/usernode-bridge/v1/mark.svg', (req, res) => {
+  if (PLATFORM_ORIGIN) return res.redirect(302, PLATFORM_ORIGIN + req.path);
+  res.type('image/svg+xml').send('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>');
 });
 
 app.get('*', (req, res) => {
