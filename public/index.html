@@ -499,6 +499,19 @@
       return state.dist.filter(function (id) { return !!DIST_FILTERS[id]; });
     }
 
+    // Training plan presets for the New Run sheet. Frontend-only: picking
+    // one pre-fills the optional distance field and shows a weekly mileage
+    // suggestion as a hint. Values stay editable and runs posted without a
+    // preset behave exactly as before.
+    var PLAN_PRESETS = {
+      '5k': { label: '5K', distance: '5', hint: '5K plan: about 15 to 25 km a week' },
+      'half': { label: 'Half', distance: '21.1', hint: 'Half marathon: about 30 to 40 km a week' },
+      'full': { label: 'Marathon', distance: '42.195', hint: 'Marathon plan: about 45 to 60 km a week' },
+    };
+    // Whole-literal chip states, shared by buildSheet and openSheet.
+    var PLAN_ON = 'plan-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#0a7aff] text-white';
+    var PLAN_OFF = 'plan-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]';
+
     /* ── Small helpers ─────────────────────────────────────────────── */
 
     function esc(s) {
@@ -1536,6 +1549,19 @@
             '<span class="' + LABEL + '">Duration</span>' +
             '<input id="f-duration" type="number" min="1" max="600" step="1" inputmode="numeric" autocomplete="off" placeholder="Optional: 45" class="' + FIELD + ' text-right">' +
           '</label>' +
+          '<div id="plan-row" class="' + ROW + ' flex-col items-stretch gap-2.5" role="group" aria-label="Training plan">' +
+            '<span class="flex items-center gap-3">' +
+              '<svg class="shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v13H8l-4 4z"/><path d="M9 10h.01M13 10h.01M17 10h.01"/></svg>' +
+              '<span class="' + LABEL + '">Plan</span>' +
+              '<span id="plan-value" class="min-w-0 flex-1 text-right text-[15px] font-medium text-[#b6b6bd] dark:text-[#6f6f78]">Optional</span>' +
+            '</span>' +
+            '<span id="plan-chips" class="flex items-center gap-1.5 pl-[34px] flex-wrap">' +
+              '<button id="plan-5k" type="button" data-plan="5k" aria-pressed="false" class="' + PLAN_OFF + '">5K</button>' +
+              '<button id="plan-half" type="button" data-plan="half" aria-pressed="false" class="' + PLAN_OFF + '">Half</button>' +
+              '<button id="plan-full" type="button" data-plan="full" aria-pressed="false" class="' + PLAN_OFF + '">Marathon</button>' +
+            '</span>' +
+            '<span id="plan-hint" class="hidden pl-[34px] text-[14px] text-[#6b6b73] dark:text-[#b0b0b8]"></span>' +
+          '</div>' +
           '<label id="distance-row" class="' + ROW + '">' +
             '<svg class="shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0M4 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>' +
             '<span class="' + LABEL + '">Distance</span>' +
@@ -1573,13 +1599,30 @@
     function openSheet() {
       if (state.sheet) return;
       var contentEl = buildSheet();
-      var handle = unNative.presentSheet({
-        contentEl: contentEl,
-        onDismiss: function () {
-          state.sheet = null;
-          if (location.hash === '#new') setHash('');
-        },
-      });
+      // Without the platform UI kit there is no sheet to present. The
+      // fallback keeps the form reachable offline or in a stripped-down
+      // browser: the rows mount inline, everything still works, and the
+      // kit's full sheet returns the moment the script loads again.
+      var handle;
+      if (window.unNative && unNative.presentSheet) {
+        handle = unNative.presentSheet({
+          contentEl: contentEl,
+          onDismiss: function () {
+            state.sheet = null;
+            if (location.hash === '#new') setHash('');
+          },
+        });
+      } else {
+        handle = {
+          dismiss: function () {
+            if (!state.sheet) return;
+            state.sheet = null;
+            contentEl.remove();
+            if (location.hash === '#new') setHash('');
+          },
+        };
+        document.body.appendChild(contentEl);
+      }
       state.sheet = handle;
 
       var where = contentEl.querySelector('#f-where');
@@ -1592,6 +1635,10 @@
       var meetingHint = contentEl.querySelector('#meeting-hint');
       var meetingStatus = contentEl.querySelector('#meeting-status');
       var meetingThumb = contentEl.querySelector('#meeting-thumb');
+      var planRow = contentEl.querySelector('#plan-row');
+      var planValueEl = contentEl.querySelector('#plan-value');
+      var planHintEl = contentEl.querySelector('#plan-hint');
+      var planChips = Array.prototype.slice.call(contentEl.querySelectorAll('.plan-chip'));
       var post = contentEl.querySelector('#post-run-btn');
       var typeRow = contentEl.querySelector('#type-row');
       var typeValueEl = contentEl.querySelector('#type-value');
@@ -1599,6 +1646,58 @@
       var meetingPin = null; // { lat, lng } once the geocoder has answered
       var meetingSeq = 0;
       var meetingTimer = null;
+
+      // The preset picker: choosing a plan fills the distance field and
+      // shows that plan's weekly mileage as a hint. Tapping the active
+      // preset again clears it, and editing the distance field by hand
+      // keeps every value editable. Everything is frontend-only state.
+      var activePlan = '';
+
+      function applyPlan(id) {
+        activePlan = activePlan === id ? '' : (id || '');
+        var preset = PLAN_PRESETS[activePlan];
+        planRow.setAttribute('data-plan', activePlan || 'none');
+        planChips.forEach(function (btn) {
+          var on = btn.getAttribute('data-plan') === activePlan;
+          btn.className = on ? PLAN_ON : PLAN_OFF;
+          btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        if (preset) {
+          distance.value = preset.distance;
+          planValueEl.textContent = preset.label;
+          planValueEl.className = 'min-w-0 flex-1 text-right text-[15px] font-medium text-[#0a7aff] dark:text-[#5aa9ff]';
+          planHintEl.textContent = preset.hint;
+          planHintEl.classList.remove('hidden');
+        } else {
+          distance.value = '';
+          planValueEl.textContent = 'Optional';
+          planValueEl.className = 'min-w-0 flex-1 text-right text-[15px] font-medium text-[#b6b6bd] dark:text-[#6f6f78]';
+          planHintEl.textContent = '';
+          planHintEl.classList.add('hidden');
+        }
+      }
+
+      function clearPlan() {
+        if (!activePlan) return;
+        activePlan = '';
+        planRow.setAttribute('data-plan', 'none');
+        planChips.forEach(function (btn) {
+          btn.className = PLAN_OFF;
+          btn.setAttribute('aria-pressed', 'false');
+        });
+        planValueEl.textContent = 'Optional';
+        planValueEl.className = 'min-w-0 flex-1 text-right text-[15px] font-medium text-[#b6b6bd] dark:text-[#6f6f78]';
+        planHintEl.textContent = '';
+        planHintEl.classList.add('hidden');
+      }
+
+      planChips.forEach(function (btn) {
+        btn.addEventListener('click', function () { applyPlan(btn.getAttribute('data-plan')); });
+      });
+
+      // A hand-edited distance stays whatever the runner typed: the field
+      // is the source of truth, the preset only ever writes into it.
+      distance.addEventListener('input', clearPlan);
 
       // Every state change lands here: what the hint says, whether the
       // thumbnail shows, and what data-map advertises to the checks.
@@ -1818,6 +1917,11 @@
       // poster usually only has to confirm or make one tap.
       when.value = toLocalInputValue(defaultStart(new Date()));
       attachWhenPicks(when);
+
+      // A ?plan= deep link pre-selects the preset after the sheet exists,
+      // so reviewers reach the filled state without clicking. Values stay
+      // editable exactly as they would be after a manual tap.
+      if (linkedPlan) applyPlan(linkedPlan);
 
       function sync() {
         var start = parseWhen(when.value);
@@ -2199,6 +2303,13 @@
       if (!linked) return;
       state.dist = linked.split(',').filter(function (id) { return !!DIST_FILTERS[id]; });
     })();
+
+    // A plan deep link for reviewers: the query param pre-selects a
+    // training plan preset when the New Run sheet opens. Same single-load
+    // rules as ?dist= above: nothing persisted, nothing written, and the
+    // plain sheet still opens with every field blank.
+    var linkedPlan = (params.get('plan') || '').toLowerCase();
+    if (!PLAN_PRESETS[linkedPlan]) linkedPlan = '';
 
     renderTheme();
     renderTimeFormat();
