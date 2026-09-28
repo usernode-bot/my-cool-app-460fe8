@@ -149,8 +149,14 @@ const RUN_SELECT = `
          EXISTS (
            SELECT 1 FROM run_reminder_optouts o
            WHERE o.run_id = r.id AND o.user_id = $1
-         ) AS reminders_off
+         ) AS reminders_off,
+         -- The caller's own logged result, if any: lets the Past tab badge
+         -- the cards they logged and the detail screen offer Edit result.
+         -- NULL for an anonymous caller, which is never true for a join.
+         res.distance_m AS my_distance_m,
+         res.duration_s AS my_duration_s
   FROM runs r
+  LEFT JOIN run_results res ON res.run_id = r.id AND res.user_id = $1
 `;
 
 /* ── Run types API ─────────────────────────────────────────────────────
@@ -393,7 +399,165 @@ app.get('/api/runs/:id', async (req, res) => {
        ORDER BY (a.user_id = r.organizer_id) DESC, a.joined_at ASC`,
       [id]
     );
-    res.json({ run: rows[0], attendees: attendees.rows });
+    // Every logged result on this run, fastest pace first. Shared content:
+    // an anonymous viewer sees the list, my_result on the run row itself
+    // stays null.
+    const results = await pool.query(
+      `SELECT user_id, username, distance_m, duration_s
+       FROM run_results WHERE run_id = $1
+       ORDER BY duration_s::float / distance_m ASC`,
+      [id]
+    );
+    res.json({ run: rows[0], attendees: attendees.rows, results: results.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── Results API ─────────────────────────────────────────────────────
+ * One result per member per run (run_results). A result is personal but
+ * shared-content-shaped: anyone viewing the run sees the RESULTS list,
+ * while saving and deleting are strictly the caller's own row.
+ * ──────────────────────────────────────────────────────────────────── */
+
+const MAX_DISTANCE_M = 500000; // 500 km: more than any run this club posts
+const MAX_DURATION_S = 86400;  // 24 hours, the same ceiling the CHECK enforces
+
+// Shared guard: the run must exist and must have started already, the
+// inverse of loadJoinableRun. A result describes something that happened.
+async function loadLoggableRun(id) {
+  const { rows } = await pool.query(
+    `SELECT id, starts_at FROM runs WHERE id = $1`,
+    [id]
+  );
+  if (!rows.length) return { error: 404, message: 'Run not found' };
+  if (new Date(rows[0].starts_at).getTime() > Date.now()) {
+    return { error: 409, message: 'That run has not happened yet.' };
+  }
+  return { run: rows[0] };
+}
+
+app.post('/api/runs/:id/result', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad run id' });
+  const distance = req.body?.distance_m;
+  const duration = req.body?.duration_s;
+  if (!Number.isInteger(distance) || distance <= 0) {
+    return res.status(400).json({ error: 'Add a distance.' });
+  }
+  if (distance > MAX_DISTANCE_M) {
+    return res.status(400).json({ error: 'That distance is too long.' });
+  }
+  if (!Number.isInteger(duration) || duration <= 0) {
+    return res.status(400).json({ error: 'Add a time.' });
+  }
+  if (duration > MAX_DURATION_S) {
+    return res.status(400).json({ error: 'That time is too long.' });
+  }
+  try {
+    const guard = await loadLoggableRun(id);
+    if (guard.error) return res.status(guard.error).json({ error: guard.message });
+    const attending = await pool.query(
+      `SELECT 1 FROM run_attendees WHERE run_id = $1 AND user_id = $2`,
+      [id, req.user.id]
+    );
+    if (!attending.rows.length) {
+      return res.status(409).json({ error: 'Join the run before logging a result.' });
+    }
+    await pool.query(
+      `INSERT INTO run_results (run_id, user_id, username, distance_m, duration_s)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (run_id, user_id) DO UPDATE
+         SET distance_m = EXCLUDED.distance_m,
+             duration_s = EXCLUDED.duration_s,
+             username = EXCLUDED.username,
+             updated_at = NOW()`,
+      [id, req.user.id, req.user.username, distance, duration]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/runs/:id/result', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad run id' });
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM run_results WHERE run_id = $1 AND user_id = $2`,
+      [id, req.user.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'No result logged.' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// The caller's personal records, computed on read from every result they
+// have logged. Fastest N km assumes even pacing: duration scaled to the
+// bucket distance. The dataset is club-scale, so no cached table.
+app.get('/api/me/records', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT res.run_id, res.distance_m, res.duration_s,
+              r.location, r.starts_at
+       FROM run_results res
+       JOIN runs r ON r.id = res.run_id
+       WHERE res.user_id = $1
+       ORDER BY r.starts_at DESC`,
+      [req.user.id]
+    );
+    let fastest1k = null;
+    let fastest5k = null;
+    let fastest10k = null;
+    let longest = null;
+    const buckets = [
+      [1000, 'fastest_1k'], [5000, 'fastest_5k'], [10000, 'fastest_10k'],
+    ];
+    for (const row of rows) {
+      for (const [bucket, key] of buckets) {
+        if (row.distance_m < bucket) continue;
+        const value = {
+          duration_s: Math.round(row.duration_s * bucket / row.distance_m),
+          distance_m: bucket,
+          run_id: row.run_id,
+          run_location: row.location,
+          starts_at: row.starts_at,
+        };
+        const current = key === 'fastest_1k' ? fastest1k
+          : key === 'fastest_5k' ? fastest5k : fastest10k;
+        if (!current || value.duration_s < current.duration_s) {
+          if (key === 'fastest_1k') fastest1k = value;
+          else if (key === 'fastest_5k') fastest5k = value;
+          else fastest10k = value;
+        }
+      }
+      const longestValue = {
+        distance_m: row.distance_m,
+        duration_s: row.duration_s,
+        run_id: row.run_id,
+        run_location: row.location,
+        starts_at: row.starts_at,
+      };
+      if (!longest || longestValue.distance_m > longest.distance_m) longest = longestValue;
+    }
+    res.json({
+      records: {
+        fastest_1k: fastest1k,
+        fastest_5k: fastest5k,
+        fastest_10k: fastest10k,
+        longest: longest,
+      },
+      recent: rows.slice(0, 10).map((row) => ({
+        run_id: row.run_id,
+        location: row.location,
+        starts_at: row.starts_at,
+        distance_m: row.distance_m,
+        duration_s: row.duration_s,
+      })),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -698,6 +862,17 @@ const SEED_RUNS = [
     organizer: [-903, 'staging-demo-nina'],
     joiners: [[-901, 'staging-demo-maya'], [-902, 'staging-demo-ethan']],
   },
+  {
+    id: 900004,
+    location: 'Staging demo: Canal towpath',
+    note: null,
+    type: null,
+    dayOffset: -10,
+    hour: 9,
+    minute: 0,
+    organizer: [-901, 'staging-demo-maya'],
+    joiners: [[-902, 'staging-demo-ethan'], [-903, 'staging-demo-nina']],
+  },
 ];
 
 // Times are recomputed on every boot so the demo rows keep saying Today /
@@ -787,6 +962,25 @@ async function seedStaging() {
      VALUES (900002, -901)
      ON CONFLICT DO NOTHING`
   );
+  // Logged results for the two past demo runs, owned by the demo
+  // identities only: a visiting tester's Records tab starts honestly
+  // empty until they log their own. Maya has two results so her records
+  // grid shows a longest-run pick between them; the 900003 pair gives
+  // the RESULTS section a fastest-first ordering to render.
+  const SEED_RESULTS = [
+    { runId: 900003, userId: -902, username: 'staging-demo-ethan', distanceM: 5000, durationS: 1452 },
+    { runId: 900003, userId: -901, username: 'staging-demo-maya', distanceM: 5000, durationS: 1564 },
+    { runId: 900004, userId: -901, username: 'staging-demo-maya', distanceM: 10000, durationS: 3180 },
+    { runId: 900004, userId: -903, username: 'staging-demo-nina', distanceM: 10200, durationS: 3240 },
+  ];
+  for (const result of SEED_RESULTS) {
+    await pool.query(
+      `INSERT INTO run_results (run_id, user_id, username, distance_m, duration_s)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (run_id, user_id) DO NOTHING`,
+      [result.runId, result.userId, result.username, result.distanceM, result.durationS]
+    );
+  }
   // The explicit ids above bypass the sequence; push it past them so the
   // first run a tester posts does not collide with a demo row.
   await pool.query(
@@ -881,6 +1075,22 @@ async function migrate() {
   await pool.query(
     `COMMENT ON TABLE run_type_labels IS 'staging:private'`
   );
+  // One result per member per run: how far they went and how long it took,
+  // stored in metres and seconds so pace can be derived in either unit.
+  // Public like runs and run_attendees: logged results on a club run are
+  // shared board content. Nothing sensitive goes in it.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS run_results (
+      run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
+      username VARCHAR(255) NOT NULL,
+      distance_m INTEGER NOT NULL CHECK (distance_m > 0 AND distance_m <= 500000),
+      duration_s INTEGER NOT NULL CHECK (duration_s > 0 AND duration_s <= 86400),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (run_id, user_id)
+    )
+  `);
 }
 
 let server;

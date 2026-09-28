@@ -120,7 +120,52 @@
       "path": "/#run/900001",
       "expectSelector": "#more-btn[aria-label*='reminders']",
       "visual": true,
-      "impact": ["public/index.html", "server.js"]
+      "impact": [
+        "public/index.html",
+        "server.js"
+      ]
+    },
+    {
+      "name": "Records tab renders its heading",
+      "path": "/?tab=records",
+      "expectText": "YOUR RECORDS"
+    },
+    {
+      "name": "Records tab shows the empty state when signed out",
+      "path": "/?tab=records",
+      "expectText": "No results yet"
+    },
+    {
+      "name": "Past run detail lists logged results",
+      "path": "/#run/900003",
+      "expectText": "staging-demo-ethan"
+    },
+    {
+      "name": "Unit toggle defaults to km",
+      "path": "/?tab=records&unit=mi",
+      "expectSelector": "#app[data-distance-unit='mi'] #du-mi[aria-pressed='true']"
+    },
+    {
+      "id": "records.tab",
+      "name": "Records tab renders",
+      "path": "/?tab=records",
+      "expectText": "YOUR RECORDS",
+      "visual": true,
+      "impact": [
+        "public/**",
+        "server.js"
+      ]
+    },
+    {
+      "id": "results.section",
+      "name": "Past run detail lists logged results",
+      "path": "/#run/900003",
+      "expectText": "RESULTS",
+      "visual": true,
+      "impact": [
+        "public/**",
+        "server.js"
+      ]
     }
   ],
   "visibility": {

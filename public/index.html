@@ -318,15 +318,24 @@
         </div>
       </header>
 
-      <div class="mt-6 grid grid-cols-2 gap-1 p-1 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[14px]">
+      <div class="mt-6 grid grid-cols-3 gap-1 p-1 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[14px]">
         <button id="tab-upcoming" type="button" data-tab="upcoming"
           class="rounded-[11px] py-2.5 text-[17px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]">Upcoming</button>
         <button id="tab-past" type="button" data-tab="past"
           class="rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">Past</button>
+        <button id="tab-records" type="button" data-tab="records"
+          class="rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">Records</button>
       </div>
 
       <div class="mt-6 mb-3 px-1 flex items-center justify-between gap-3">
         <h2 id="list-heading" class="text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93] dark:text-[#98989f]">UPCOMING RUNS</h2>
+        <div id="distance-unit" role="group" aria-label="Distance unit"
+          class="shrink-0 flex items-center gap-0.5 p-0.5 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[10px]">
+          <button id="du-km" type="button" data-unit="km" aria-pressed="true"
+            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]">km</button>
+          <button id="du-mi" type="button" data-unit="mi" aria-pressed="false"
+            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#8e8e93] dark:text-[#98989f] shadow-none">mi</button>
+        </div>
         <div id="time-format" role="group" aria-label="Time format"
           class="shrink-0 flex items-center gap-0.5 p-0.5 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[10px]">
           <button id="tf-auto" type="button" data-format="auto" aria-pressed="true" title="Follows your language"
@@ -395,6 +404,8 @@
       sheet: null,
       me: null,          // resolved from the first API response we own
       timeFormat: 'auto', // mode: 'auto' (follow the locale), '12' or '24'; resolved at boot below
+      distanceUnit: 'km', // display-only: 'km' or 'mi'; stored values stay metric
+      records: null,      // GET /api/me/records response, fetched when the Records tab opens
     };
 
     /* ── Small helpers ─────────────────────────────────────────────── */
@@ -577,6 +588,66 @@
       }
     }
 
+    /* ── Distance, duration and pace ──────────────────────────── */
+
+    // Results are stored metric (metres, seconds); the km / mi toggle is
+    // display-only, so every conversion happens at render time.
+    var MILES_PER_METRE = 0.000621371;
+    var SEC_PER_KM_PER_MI = 1.609344;
+
+    function fmtDistance(m, unit) {
+      if (unit === 'mi') {
+        var miles = m * MILES_PER_METRE;
+        return (miles >= 10 ? miles.toFixed(1) : miles.toFixed(2)) + ' mi';
+      }
+      return (m / 1000 >= 10 ? (m / 1000).toFixed(1) : (m / 1000).toFixed(2)) + ' km';
+    }
+
+    // h:mm:ss at an hour and over, m:ss below. Zero-padded so columns align.
+    function fmtDuration(totalSeconds) {
+      var s = Math.round(totalSeconds);
+      var h = Math.floor(s / 3600);
+      var m = Math.floor((s % 3600) / 60);
+      var sec = s % 60;
+      var pad = function (n) { return String(n).padStart(2, '0'); };
+      return h ? h + ':' + pad(m) + ':' + pad(sec) : m + ':' + pad(sec);
+    }
+
+    // Seconds per the display unit, e.g. "5:12 /km". When the unit is mi
+    // the pace multiplies by 1.609344 (a mile takes longer than a km).
+    function fmtPace(secPerKm, unit) {
+      var secs = secPerKm;
+      var suffix = ' /km';
+      if (unit === 'mi') {
+        secs = secPerKm * SEC_PER_KM_PER_MI;
+        suffix = ' /mi';
+      }
+      return fmtDuration(secs) + suffix;
+    }
+
+    // Lenient parse of what the Time field accepts: h:mm:ss, mm:ss or a
+    // plain number of minutes. Returns seconds or null.
+    function parseDurationText(raw) {
+      var text = String(raw || '').trim();
+      if (!/^\d+(:\d{1,2}){0,2}$/.test(text)) return null;
+      var parts = text.split(':').map(function (n) { return parseInt(n, 10); });
+      var secs = 0;
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i] > 59 && parts.length - i > 1) return null; // only the leftmost part may exceed 59
+        secs = secs * 60 + parts[i];
+      }
+      return secs > 0 ? secs : null;
+    }
+
+    // Lenient parse of the Distance field: a plain number, interpreted in
+    // the display unit. Returns metres or null.
+    function parseDistanceText(raw, unit) {
+      var value = parseFloat(String(raw || '').trim().replace(',', '.'));
+      if (!isFinite(value) || value <= 0) return null;
+      var metres = unit === 'mi' ? value / MILES_PER_METRE : value * 1000;
+      return Math.round(metres);
+    }
+
     /* ── Remembering the choice ───────────────────────────── */
 
     var FORMAT_KEY = 'runclub.timeFormat';
@@ -629,6 +700,48 @@
       state.timeFormat = value;
       writeFormat(value);
       render();
+    }
+
+    /* ── Remembering the distance unit ────────────────────── */
+
+    var UNIT_KEY = 'runclub.distanceUnit';
+    var UNIT_MODES = { km: 1, mi: 1 };
+
+    // Same key pattern as the time format: per-user key shadows a shared
+    // one on a shared device, both written, guarded against a refused
+    // frame store. The unit is a display choice, so a failed write only
+    // means the choice does not survive the reload.
+    var unitKeys = (function () {
+      var who = tokenUsername();
+      return who ? [UNIT_KEY + ':' + who, UNIT_KEY] : [UNIT_KEY];
+    })();
+
+    function readUnit() {
+      for (var i = 0; i < unitKeys.length; i++) {
+        try {
+          var v = window.localStorage.getItem(unitKeys[i]);
+          if (UNIT_MODES[v]) return v;
+        } catch (err) {
+          return '';
+        }
+      }
+      return '';
+    }
+
+    function writeUnit(value) {
+      try {
+        window.localStorage.setItem(UNIT_KEY, value);
+        if (unitKeys.length > 1) window.localStorage.setItem(unitKeys[0], value);
+      } catch (err) { /* storage refused: this load still honours the choice */ }
+    }
+
+    function setUnit(value) {
+      if (!UNIT_MODES[value]) return;
+      if (state.distanceUnit === value) return;
+      state.distanceUnit = value;
+      writeUnit(value);
+      renderTimeFormat();
+      renderList();
     }
 
     // Today / Tomorrow / Yesterday where they apply, a short date otherwise.
@@ -739,6 +852,9 @@
               '<span class="run-time text-[17px] text-[#8e8e93] dark:text-[#98989f]">' + esc(fmtTime(when)) + '</span>' +
               (run.type_label
                 ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] text-[14px] font-semibold">' + esc(run.type_label) + '</span>'
+                : '') +
+              (past && run.my_distance_m
+                ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#d7f5de] dark:bg-[#123a1f] text-[#1b8a3d] dark:text-[#5fdd8a] text-[14px] font-semibold">' + esc(fmtDistance(run.my_distance_m, state.distanceUnit)) + '</span>'
                 : '') + '</div>' +
             note +
           '</div>' +
@@ -752,6 +868,11 @@
     }
 
     function renderList() {
+      if (state.tab === 'records') {
+        headingEl.textContent = 'YOUR RECORDS';
+        renderRecords();
+        return;
+      }
       headingEl.textContent = state.tab === 'past' ? 'PAST RUNS' : 'UPCOMING RUNS';
       if (!state.runs.length) {
         listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">' +
@@ -771,9 +892,13 @@
         state.tab === 'upcoming' ? TAB_ON : TAB_OFF;
       document.getElementById('tab-past').className =
         state.tab === 'past' ? TAB_ON : TAB_OFF;
+      document.getElementById('tab-records').className =
+        state.tab === 'records' ? TAB_ON : TAB_OFF;
     }
 
     function loadRuns() {
+      // The Records tab is not a run filter; it owns its own fetch below.
+      if (state.tab === 'records') return Promise.resolve();
       return api('/api/runs?filter=' + state.tab).then(function (data) {
         state.runs = data.runs || [];
         renderList();
@@ -782,9 +907,85 @@
       });
     }
 
+    /* ── Records tab ───────────────────────────────────────────────── */
+
+    // The signed-in member's personal records. Fetched once per tab
+    // switch, re-rendered on unit toggles without a refetch. A failure
+    // or a signed-out 401 both land on the empty state rather than an
+    // error card, the same quiet catch the reminder poll uses.
+    function loadRecords() {
+      return api('/api/me/records').then(function (data) {
+        state.records = data;
+        renderList();
+      }).catch(function () {
+        state.records = null;
+        renderList();
+      });
+    }
+
+    function recordsGridHtml() {
+      var unit = state.distanceUnit;
+      var defs = [
+        { label: 'Fastest 1 km', record: 'fastest_1k', value: function (r) { return fmtPace(r.duration_s, unit); } },
+        { label: 'Fastest 5 km', record: 'fastest_5k', value: function (r) { return fmtDuration(r.duration_s); } },
+        { label: 'Fastest 10 km', record: 'fastest_10k', value: function (r) { return fmtDuration(r.duration_s); } },
+        { label: 'Longest run', record: 'longest', value: function (r) { return fmtDistance(r.distance_m, unit); } },
+      ];
+      var cards = defs.map(function (def) {
+        var record = state.records && state.records.records ? state.records.records[def.record] : null;
+        var info = record ? dayInfo(new Date(record.starts_at)) : null;
+        return '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">' +
+          '<p class="text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93] dark:text-[#98989f]">' + esc(def.label) + '</p>' +
+          (record
+            ? '<p class="mt-2 text-[26px] font-bold leading-tight">' + esc(def.value(record)) + '</p>' +
+              '<p class="mt-1 text-[15px] text-[#8e8e93] dark:text-[#98989f] truncate">' + esc(record.run_location) + '</p>' +
+              '<p class="text-[15px] text-[#8e8e93] dark:text-[#98989f]">' + esc(info.label) + '</p>'
+            : '<p class="mt-2 text-[26px] font-bold leading-tight text-[#b6b6bd] dark:text-[#6f6f78]">' + (def.record === 'longest' ? '0 km' : 'None') + '</p>') +
+        '</div>';
+      }).join('');
+      return '<div class="grid grid-cols-2 gap-3">' + cards + '</div>';
+    }
+
+    function recentResultsHtml() {
+      var unit = state.distanceUnit;
+      var recent = state.records && state.records.recent ? state.records.recent : [];
+      if (!recent.length) {
+        return '<p class="py-4 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">No results yet. Open a past run you joined and log your run.</p>';
+      }
+      var rows = recent.map(function (result) {
+        var pace = result.duration_s / (result.distance_m / 1000);
+        return '<div class="flex items-center gap-3 px-4 py-3.5">' +
+          '<div class="min-w-0 flex-1">' +
+            '<p class="text-[17px] font-medium truncate">' + esc(result.location) + '</p>' +
+            '<p class="text-[15px] text-[#8e8e93] dark:text-[#98989f]">' + esc(dayInfo(new Date(result.starts_at)).label) + '</p>' +
+          '</div>' +
+          '<div class="shrink-0 text-right">' +
+            '<p class="text-[17px] font-semibold">' + esc(fmtDistance(result.distance_m, unit)) + '</p>' +
+            '<p class="text-[15px] text-[#8e8e93] dark:text-[#98989f]">' + esc(fmtDuration(result.duration_s)) + ' · ' + esc(fmtPace(pace, unit)) + '</p>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+      return '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' + rows + '</div>';
+    }
+
+    function renderRecords() {
+      var hasRecords = state.records && (
+        (state.records.recent && state.records.recent.length) ||
+        (state.records.records && (state.records.records.fastest_1k || state.records.records.fastest_5k || state.records.records.fastest_10k || state.records.records.longest))
+      );
+      if (!hasRecords) {
+        listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">' +
+          'No results yet. Open a past run you joined and log your run.</p>';
+        return;
+      }
+      listEl.innerHTML = recordsGridHtml() +
+        '<h3 class="mt-6 mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93] dark:text-[#98989f]">RECENT RESULTS</h3>' +
+        recentResultsHtml();
+    }
+
     /* ── Run details ───────────────────────────────────────────────── */
 
-    function detailHtml(run, attendees) {
+    function detailHtml(run, attendees, results) {
       var when = new Date(run.starts_at);
       var info = dayInfo(when);
       var whenText = info.label + ' · ' + fmtTime(when);
@@ -796,6 +997,14 @@
         action = run.joined
           ? '<button id="detail-action" type="button" data-action="leave" class="shrink-0 px-6 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8] text-[17px] font-semibold">Leave</button>'
           : '<button id="detail-action" type="button" data-action="join" class="shrink-0 px-7 py-2.5 rounded-full bg-[#0a7aff] text-white text-[17px] font-semibold">Join</button>';
+      } else if (isPast && run.joined) {
+        // A run you were part of and that has happened is where a result
+        // goes. Same pill as Join, blue while there is something to do.
+        action = '<button id="log-result-btn" type="button" class="shrink-0 px-6 py-2.5 rounded-full ' +
+          (run.my_distance_m
+            ? 'bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]'
+            : 'bg-[#0a7aff] text-white') +
+          ' text-[17px] font-semibold">' + (run.my_distance_m ? 'Edit result' : 'Log your run') + '</button>';
       }
 
       var note = run.note
@@ -867,6 +1076,30 @@
           : '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl px-4 py-8 text-center text-[17px] text-[#8e8e93] dark:text-[#98989f]">Nobody has joined yet.</div>') +
       '</div>';
 
+      // A past run with logged results lists them fastest pace first,
+      // mirroring the Who's Going rows. Only rendered when there is
+      // something to show; future runs contribute nothing here.
+      var resultsSection = '';
+      if (isPast && results.length) {
+        var resultRows = results.map(function (res) {
+          var pace = res.duration_s / (res.distance_m / 1000);
+          return '<div class="flex items-center gap-3 px-4 py-3.5">' +
+            avatarHtml(res.username, 'lg') +
+            '<div class="min-w-0 flex-1">' +
+              '<p class="text-[19px] font-medium truncate">' + esc(res.username) + '</p>' +
+              '<p class="text-[15px] text-[#8e8e93] dark:text-[#98989f]">' +
+                esc(fmtDistance(res.distance_m, state.distanceUnit)) + ' · ' +
+                esc(fmtDuration(res.duration_s)) + ' · ' +
+                esc(fmtPace(pace, state.distanceUnit)) + '</p>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+        resultsSection = '<div>' +
+          '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#8e8e93] dark:text-[#98989f]">RESULTS</h3>' +
+          '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' + resultRows + '</div>' +
+        '</div>';
+      }
+
       var footnote = '<p class="flex items-start gap-2 px-1 pb-2 text-[15px] leading-snug text-[#8e8e93] dark:text-[#98989f]">' +
         '<svg class="mt-0.5 shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.1"/></svg>' +
         (isPast
@@ -875,17 +1108,21 @@
             ? 'You are organizing this run. Cancel it from the menu if plans change.'
             : 'Join to be counted as going. You can leave anytime.') + '</p>';
 
-      return banner + summary + facts + going + footnote;
+      return banner + summary + facts + going + resultsSection + footnote;
     }
 
     function renderDetail() {
       if (!state.detail) return;
-      detailBodyEl.innerHTML = detailHtml(state.detail.run, state.detail.attendees);
+      detailBodyEl.innerHTML = detailHtml(state.detail.run, state.detail.attendees, state.detail.results || []);
     }
 
     function loadDetail(id) {
       return api('/api/runs/' + id).then(function (data) {
-        state.detail = { run: data.run, attendees: data.attendees || [] };
+        state.detail = {
+          run: data.run,
+          attendees: data.attendees || [],
+          results: data.results || [],
+        };
         return state.detail;
       });
     }
@@ -906,6 +1143,15 @@
       var app = document.getElementById('app');
       app.setAttribute('data-time-format', effectiveFormat());
       app.setAttribute('data-time-format-mode', state.timeFormat);
+      // The km / mi toggle shares this render pass: same on/off classes,
+      // same aria-pressed assertion pattern as the time-format buttons.
+      ['km', 'mi'].forEach(function (value) {
+        var btn = document.getElementById('du-' + value);
+        var on = state.distanceUnit === value;
+        btn.className = on ? TF_ON : TF_OFF;
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      app.setAttribute('data-distance-unit', state.distanceUnit);
     }
 
     /* -- Display mode: one icon, three choices --------------------- */
@@ -1048,6 +1294,14 @@
         if (choice) setFormat(choice.value);
       }).catch(function () { /* dismissed */ });
     }
+
+    /* -- Distance unit toggle (km / mi) ----------------------------- */
+
+    ['km', 'mi'].forEach(function (value) {
+      document.getElementById('du-' + value).addEventListener('click', function () {
+        setUnit(value);
+      });
+    });
 
     /* -- Platform locale ------------------------------------------- */
 
@@ -1375,6 +1629,118 @@
       where.focus({ preventScroll: true });
     }
 
+    /* ── Log run sheet ─────────────────────────────────────────────── */
+
+    // Same presentation as the New Run sheet, two fields instead of five:
+    // distance in the display unit (always stored as metres) and time as
+    // h:mm:ss or mm:ss. When a result already exists the same sheet edits
+    // it and offers Delete.
+    function openLogSheet(run) {
+      if (state.sheet) return;
+      var existing = run.my_distance_m ? { distance_m: run.my_distance_m, duration_s: run.my_duration_s } : null;
+      var unit = state.distanceUnit;
+      var wrap = document.createElement('div');
+      wrap.className = 'pb-1';
+      var ROW = 'flex items-center gap-3 rounded-2xl border border-[#e4e4ea] dark:border-[#33333a] px-4 py-4';
+      var LABEL = 'shrink-0 w-[64px] text-[17px] text-[#6b6b73] dark:text-[#b0b0b8]';
+      var FIELD = 'flex-1 min-w-0 bg-transparent outline-none text-[17px] text-[#111114] dark:text-[#f2f2f7] placeholder:text-[#b6b6bd] dark:placeholder:text-[#6f6f78] text-right';
+
+      wrap.innerHTML =
+        '<div class="flex items-center justify-between gap-3">' +
+          '<h2 class="text-[30px] font-extrabold tracking-tight">Log run</h2>' +
+          '<button id="sheet-close" type="button" aria-label="Close" class="un-touch-target shrink-0 w-9 h-9 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#8e8e93] dark:text-[#98989f] flex items-center justify-center">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
+          '</button>' +
+        '</div>' +
+        '<p class="mt-1 text-[15px] text-[#8e8e93] dark:text-[#98989f] truncate">' + esc(run.location) + '</p>' +
+        '<div class="mt-5 space-y-3">' +
+          '<label class="' + ROW + '">' +
+            '<svg class="shrink-0 text-[#23a455] dark:text-[#4ed07f]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l6-10 4 6 2.5-4L21 19H3z"/></svg>' +
+            '<span class="' + LABEL + '">Distance</span>' +
+            '<input id="f-distance" type="text" inputmode="decimal" autocomplete="off" placeholder="' + (unit === 'mi' ? 'e.g. 3.1 mi' : 'e.g. 5 km') + '" class="' + FIELD + '">' +
+          '</label>' +
+          '<label class="' + ROW + '">' +
+            '<svg class="shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 12l3-3M12 7.5v.1"/></svg>' +
+            '<span class="' + LABEL + '">Time</span>' +
+            '<input id="f-time" type="text" inputmode="numeric" autocomplete="off" placeholder="h:mm:ss" class="' + FIELD + '">' +
+          '</label>' +
+          '<button id="delete-result-btn" type="button" class="hidden w-full py-3 text-[17px] font-semibold text-[#b6b6bd] dark:text-[#6f6f78]">Delete result</button>' +
+        '</div>' +
+        '<button id="save-result-btn" type="button" disabled class="mt-5 w-full h-[58px] rounded-2xl bg-[#0a7aff] text-white text-[19px] font-semibold disabled:opacity-40">Save result</button>';
+
+      var handle = unNative.presentSheet({
+        contentEl: wrap,
+        onDismiss: function () {
+          state.sheet = null;
+        },
+      });
+      state.sheet = handle;
+
+      var distanceInput = wrap.querySelector('#f-distance');
+      var timeInput = wrap.querySelector('#f-time');
+      var save = wrap.querySelector('#save-result-btn');
+      var deleteBtn = wrap.querySelector('#delete-result-btn');
+      if (existing) {
+        distanceInput.value = unit === 'mi'
+          ? (existing.distance_m * MILES_PER_METRE).toFixed(2)
+          : (existing.distance_m / 1000).toFixed(2);
+        timeInput.value = fmtDuration(existing.duration_s);
+        deleteBtn.classList.remove('hidden');
+      }
+
+      function sync() {
+        save.disabled = !(parseDistanceText(distanceInput.value, unit) &&
+          parseDurationText(timeInput.value));
+      }
+      [distanceInput, timeInput].forEach(function (el) {
+        el.addEventListener('input', sync);
+      });
+      sync();
+
+      wrap.querySelector('#sheet-close').addEventListener('click', function () {
+        handle.dismiss();
+      });
+
+      save.addEventListener('click', function () {
+        var distanceM = parseDistanceText(distanceInput.value, unit);
+        var durationS = parseDurationText(timeInput.value);
+        if (!distanceM || !durationS) return;
+        save.disabled = true;
+        save.textContent = 'Saving...';
+        api('/api/runs/' + run.id + '/result', {
+          method: 'POST',
+          body: JSON.stringify({ distance_m: distanceM, duration_s: durationS }),
+        }).then(function () {
+          handle.dismiss();
+          return refreshBoth(run.id);
+        }).then(function () {
+          notify('Result saved.');
+        }).catch(function (err) {
+          save.disabled = false;
+          save.textContent = 'Save result';
+          notify(err.message);
+        });
+      });
+
+      deleteBtn.addEventListener('click', function () {
+        deleteBtn.disabled = true;
+        api('/api/runs/' + run.id + '/result', { method: 'DELETE' })
+          .then(function () {
+            handle.dismiss();
+            return refreshBoth(run.id);
+          })
+          .then(function () {
+            notify('Result deleted.');
+          })
+          .catch(function (err) {
+            deleteBtn.disabled = false;
+            notify(err.message);
+          });
+      });
+
+      distanceInput.focus({ preventScroll: true });
+    }
+
     /* ── Actions ───────────────────────────────────────────────────── */
 
     // The shared message is the detail screen's own summary plus a tokenless
@@ -1407,7 +1773,7 @@
     }
 
     function refreshBoth(id) {
-      var jobs = [loadRuns()];
+      var jobs = [state.tab === 'records' ? Promise.resolve() : loadRuns()];
       if (id != null && state.detail && state.detail.run.id === id) {
         jobs.push(loadDetail(id).then(renderDetail));
       }
@@ -1438,6 +1804,11 @@
     });
 
     detailBodyEl.addEventListener('click', function (e) {
+      var log = e.target.closest('#log-result-btn');
+      if (log) {
+        if (state.detail) openLogSheet(state.detail.run);
+        return;
+      }
       var btn = e.target.closest('#detail-action');
       if (!btn || !state.detail) return;
       var id = state.detail.run.id;
@@ -1546,14 +1917,15 @@
       setHash('');
     });
 
-    [['tab-upcoming', 'upcoming'], ['tab-past', 'past']].forEach(function (pair) {
+    [['tab-upcoming', 'upcoming'], ['tab-past', 'past'], ['tab-records', 'records']].forEach(function (pair) {
       document.getElementById(pair[0]).addEventListener('click', function () {
         if (state.tab === pair[1]) return;
         state.tab = pair[1];
         state.runs = [];
         renderTabs();
         renderList();
-        loadRuns();
+        if (pair[1] === 'records') loadRecords();
+        else loadRuns();
       });
     });
 
@@ -1619,17 +1991,40 @@
       if (stored) state.timeFormat = stored;
     })();
 
+    // Same shape as the time format above: an explicit ?unit= is a test
+    // and deep-link hook that wins over the remembered choice, never
+    // persisted. km stays the default for everyone.
+    (function resolveUnit() {
+      var linked = params.get('unit');
+      if (UNIT_MODES[linked]) {
+        state.distanceUnit = linked;
+        return;
+      }
+      var stored = readUnit();
+      if (stored) state.distanceUnit = stored;
+    })();
+
     renderTheme();
     renderTimeFormat();
     renderTabs();
     loadRunTypes();
-    loadRuns().then(route);
+    // ?tab=records lands straight on the Records tab, the same way a
+    // tester reaches the changed screen; it is view state, not a write.
+    if (params.get('tab') === 'records') {
+      state.tab = 'records';
+      renderTabs();
+      loadRecords().then(route);
+    } else {
+      loadRuns().then(route);
+    }
 
     if (window.unNative && unNative.attachPullToRefresh) {
       unNative.attachPullToRefresh(window, function () {
         return state.screen === 'detail' && state.detail
           ? loadDetail(state.detail.run.id).then(renderDetail)
-          : loadRuns();
+          : state.tab === 'records'
+            ? loadRecords()
+            : loadRuns();
       }, { content: document.getElementById('app') });
     }
 
