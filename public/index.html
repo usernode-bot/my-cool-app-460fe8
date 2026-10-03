@@ -307,10 +307,10 @@
         <div class="shrink-0 flex items-center gap-2 pt-0.5">
           <!-- The glyph itself is drawn by renderTheme() so it always shows
                the mode that is actually in force. -->
-          <button id="theme-btn" type="button" class="theme-btn un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center"
+          <button id="theme-btn" type="button" class="theme-btn un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center"
             aria-label="Display mode" title="Display mode"></button>
           <button id="new-run-btn" type="button" aria-label="Post a new run"
-            class="un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
+            class="un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
               <path d="M12 5v14M5 12h14"/>
             </svg>
@@ -320,7 +320,7 @@
 
       <div class="mt-6 grid grid-cols-2 gap-1 p-1 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[14px]">
         <button id="tab-upcoming" type="button" data-tab="upcoming"
-          class="rounded-[11px] py-2.5 text-[17px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]">Upcoming</button>
+          class="rounded-[11px] py-2.5 text-[17px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_3px_rgba(0,0,0,0.08)]">Upcoming</button>
         <button id="tab-past" type="button" data-tab="past"
           class="rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none">Past</button>
       </div>
@@ -329,15 +329,16 @@
       <input id="member-search" type="search" placeholder="Search by member name"
         autocomplete="off" class="mt-3 w-full px-4 py-2.5 text-[17px] rounded-[14px]
         bg-white dark:bg-[#1c1c20] text-[#111114] dark:text-white
+        border border-[#ececf0] dark:border-[#2c2c31]
         placeholder:text-[#8e8e93] dark:placeholder:text-[#98989f]
-        shadow-[0_1px_3px_rgba(0,0,0,0.08)] outline-none focus:ring-2 focus:ring-[#0a7aff]/40" />
+        shadow-[0_1px_3px_rgba(0,0,0,0.08)] outline-none focus:ring-2 focus:ring-[#0a68e0]/40" />
 
       <div class="mt-6 mb-3 px-1 flex items-center justify-between gap-3">
         <h2 id="list-heading" class="text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">UPCOMING RUNS</h2>
         <div id="time-format" role="group" aria-label="Time format"
           class="shrink-0 flex items-center gap-0.5 p-0.5 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[10px]">
           <button id="tf-auto" type="button" data-format="auto" aria-pressed="true" title="Follows your language"
-            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]">Auto</button>
+            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_2px_rgba(0,0,0,0.08)]">Auto</button>
           <button id="tf-12" type="button" data-format="12" aria-pressed="false"
             class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none">AM/PM</button>
           <button id="tf-24" type="button" data-format="24" aria-pressed="false"
@@ -360,17 +361,17 @@
     <section id="screen-detail" class="px-5 pb-24 hidden">
       <header class="flex items-center justify-between">
         <button id="back-btn" type="button" aria-label="Back"
-          class="un-touch-target w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
+          class="un-touch-target w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <path d="M15 5l-7 7 7 7"/>
           </svg>
         </button>
         <div class="shrink-0 flex items-center gap-2">
-        <button id="theme-btn-detail" type="button" class="theme-btn un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center"
+        <button id="theme-btn-detail" type="button" class="theme-btn un-touch-target shrink-0 w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center"
           aria-label="Display mode" title="Display mode"></button>
         <button id="more-btn" type="button"
           aria-label="More options. Contains: Share, reminders, and cancel or leave"
-          class="un-touch-target w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
+          class="un-touch-target w-[52px] h-[52px] rounded-full bg-white dark:bg-[#1c1c20] border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_3px_rgba(0,0,0,0.08)] flex items-center justify-center">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
             <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
           </svg>
@@ -518,8 +519,10 @@
       'half': { label: 'Half', distance: '21.1', hint: 'Half marathon: about 30 to 40 km a week' },
       'full': { label: 'Marathon', distance: '42.195', hint: 'Marathon plan: about 45 to 60 km a week' },
     };
-    // Whole-literal chip states, shared by buildSheet and openSheet.
-    var PLAN_ON = 'plan-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#0a7aff] text-white';
+    // Whole-literal chip states, shared by buildSheet and openSheet. The
+    // selected preset lifts as a raised neutral surface, same rule as the
+    // day/time picks, instead of painting itself blue.
+    var PLAN_ON = 'plan-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
     var PLAN_OFF = 'plan-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]';
 
     /* ── Small helpers ─────────────────────────────────────────────── */
@@ -804,11 +807,10 @@
     }
 
     function badgeHtml(info) {
-      if (info.tone === 'today') {
-        return '<span class="px-2 py-0.5 rounded-md bg-[#d7f5de] dark:bg-[#123a1f] text-[#157a33] dark:text-[#5fdd8a] text-[16px] font-semibold">' + esc(info.label) + '</span>';
-      }
-      if (info.tone === 'tomorrow') {
-        return '<span class="px-2 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#12243d] text-[#0854c0] dark:text-[#6fb4ff] text-[16px] font-semibold">' + esc(info.label) + '</span>';
+      // Today and Tomorrow wear the app's one quiet gray chip, same as the
+      // type and distance badges: the label carries the meaning, not a hue.
+      if (info.tone === 'today' || info.tone === 'tomorrow') {
+        return '<span class="px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[16px] font-semibold">' + esc(info.label) + '</span>';
       }
       return '<span class="text-[16px] font-semibold text-[#111114] dark:text-[#f2f2f7]">' + esc(info.label) + '</span>';
     }
@@ -817,18 +819,21 @@
 
     // Whole-literal class strings: Tailwind's extractor is a regex over
     // this file, so an assembled "bg-[" + hex + "]" would never compile.
+    // The tiles used to carry one pastel color per shape; the shapes stay,
+    // but every tile is now the same quiet neutral surface with a muted
+    // icon, so the colored tiles stop competing with the actions.
     var GLYPHS = [
-      { bg: 'bg-[#dcf5e3] dark:bg-[#12331f]', fg: 'text-[#1d8544] dark:text-[#4ed07f]', d: 'M12 3l4 6h-2.5l3 5H14l3 5H7l3-5H7.5l3-5H8l4-6zM12 19v2' },
-      { bg: 'bg-[#dbeafe] dark:bg-[#12243d]', fg: 'text-[#0854c0] dark:text-[#6fb4ff]', d: 'M3 8c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 13c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 18c2-2 4-2 6 0s4 2 6 0 4-2 6 0' },
-      { bg: 'bg-[#ede4ff] dark:bg-[#241a3d]', fg: 'text-[#5b2ca8] dark:text-[#b494ff]', d: 'M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z' },
-      { bg: 'bg-[#ffe8d5] dark:bg-[#3a2513]', fg: 'text-[#c74f00] dark:text-[#ffa257]', d: 'M12 5c5 0 9 3.1 9 7s-4 7-9 7-9-3.1-9-7 4-7 9-7zm0 4c2.2 0 4 1.3 4 3s-1.8 3-4 3-4-1.3-4-3 1.8-3 4-3z' },
-      { bg: 'bg-[#ffe1ee] dark:bg-[#3a1526]', fg: 'text-[#d0236a] dark:text-[#ff7fb8]', d: 'M3 19l6-10 4 6 2.5-4L21 19H3z' },
+      { d: 'M12 3l4 6h-2.5l3 5H14l3 5H7l3-5H7.5l3-5H8l4-6zM12 19v2' },
+      { d: 'M3 8c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 13c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 18c2-2 4-2 6 0s4 2 6 0 4-2 6 0' },
+      { d: 'M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z' },
+      { d: 'M12 5c5 0 9 3.1 9 7s-4 7-9 7-9-3.1-9-7 4-7 9-7zm0 4c2.2 0 4 1.3 4 3s-1.8 3-4 3-4-1.3-4-3 1.8-3 4-3z' },
+      { d: 'M3 19l6-10 4 6 2.5-4L21 19H3z' },
     ];
 
     function glyphHtml(location, size) {
       var g = GLYPHS[hash(location) % GLYPHS.length];
       var box = size === 'lg' ? 'w-[52px] h-[52px]' : 'w-[52px] h-[52px]';
-      return '<div class="' + box + ' shrink-0 rounded-[14px] ' + g.bg + ' ' + g.fg +
+      return '<div class="' + box + ' shrink-0 rounded-[14px] bg-[#f2f2f7] dark:bg-[#26262b] border border-[#ececf0] dark:border-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8]' +
         ' flex items-center justify-center">' +
         '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
         'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="' + g.d + '"/></svg></div>';
@@ -903,7 +908,7 @@
           : '<button type="button" class="join-btn shrink-0 px-6 py-2.5 rounded-full bg-[#0a68e0] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0">Join</button>';
       }
 
-      return '<div class="run-card un-pressable bg-white dark:bg-[#1c1c20] rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]" role="button" tabindex="0" data-id="' + run.id + '">' +
+      return '<div class="run-card un-pressable bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]" role="button" tabindex="0" data-id="' + run.id + '">' +
         '<div class="flex gap-3">' + mediaHtml(run) +
           '<div class="min-w-0 flex-1">' +
             '<h3 class="text-[19px] font-bold leading-tight truncate">' + esc(run.location) + '</h3>' +
@@ -916,7 +921,7 @@
                 ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[14px] font-semibold">' + esc(run.type_label) + '</span>'
                 : '') +
               (run.distance_km
-                ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#12243d] text-[#0854c0] dark:text-[#6fb4ff] text-[14px] font-semibold">' + esc(fmtKm(run.distance_km)) + '</span>'
+                ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[14px] font-semibold">' + esc(fmtKm(run.distance_km)) + '</span>'
                 : '') + '</div>' +
             note +
           '</div>' +
@@ -954,7 +959,7 @@
       listEl.innerHTML = shown.map(cardHtml).join('');
     }
 
-    var TAB_ON = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]';
+    var TAB_ON = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_3px_rgba(0,0,0,0.08)]';
     var TAB_OFF = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none';
 
     function renderTabs() {
@@ -1005,7 +1010,7 @@
       // is omitted entirely when the run has none. The thumbnail renders at
       // 320px in this stack, so the same zoom that serves the sheet serves it.
       var meeting = (run.meeting_point && run.meeting_lat != null && run.meeting_lng != null)
-        ? '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
+        ? '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
             '<div class="flex items-center gap-3 px-4 py-4">' +
               '<svg class="shrink-0 text-[#0854c0] dark:text-[#6fb4ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
               '<span class="shrink-0 text-[19px] font-medium">Meeting point</span>' +
@@ -1016,11 +1021,11 @@
         : '';
 
       var summary =
-        '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl p-4">' +
+        '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] p-4">' +
           '<div class="flex gap-3">' + mediaHtml(run, 'lg') +
             '<div class="min-w-0 flex-1">' +
               '<h2 class="text-[19px] font-bold leading-tight">' + esc(run.location) + '</h2>' +
-              '<p class="mt-1 text-[17px] font-semibold text-[#0854c0] dark:text-[#6fb4ff]">' + esc(info.label) + ' · ' +
+              '<p class="mt-1 text-[17px] font-semibold text-[#111114] dark:text-[#f2f2f7]">' + esc(info.label) + ' · ' +
                 '<span class="run-time">' + esc(fmtTime(when)) + '</span></p>' +
               note +
             '</div>' +
@@ -1035,10 +1040,13 @@
       // `wrap` lets a long value run onto a second line instead of being cut
       // off; the short ones stay on a single right-aligned line.
       function infoRow(iconPath, label, value, blue, wrap) {
+        // Icons and values are quiet: muted gray icons, the highlighted
+        // When value in primary text. Blue stays on the actions, not the
+        // facts.
         return '<div class="flex items-center gap-3 px-4 py-4">' +
-          '<svg class="shrink-0 text-[#0854c0] dark:text-[#6fb4ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="' + iconPath + '"/></svg>' +
+          '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="' + iconPath + '"/></svg>' +
           '<span class="shrink-0 text-[19px] font-medium">' + esc(label) + '</span>' +
-          '<span class="ml-auto min-w-0 text-[19px] text-right ' + (wrap ? '' : 'truncate ') + (blue ? 'text-[#0854c0] dark:text-[#6fb4ff] font-medium' : 'text-[#62626a] dark:text-[#b0b0b8]') + '">' + esc(value) + '</span>' +
+          '<span class="ml-auto min-w-0 text-[19px] text-right ' + (wrap ? '' : 'truncate ') + (blue ? 'text-[#111114] dark:text-[#f2f2f7] font-medium' : 'text-[#62626a] dark:text-[#b0b0b8]') + '">' + esc(value) + '</span>' +
         '</div>';
       }
 
@@ -1051,7 +1059,7 @@
 
       // data-type / data-duration let the checks tell a detailed run from a
       // bare one without asserting on text that may not be there.
-      var facts = '<div data-type="' + (run.type_label ? '1' : '0') + '" data-duration="' + (run.duration_minutes ? '1' : '0') + '" data-distance="' + (run.distance_km ? '1' : '0') + '" class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
+      var facts = '<div data-type="' + (run.type_label ? '1' : '0') + '" data-duration="' + (run.duration_minutes ? '1' : '0') + '" data-distance="' + (run.distance_km ? '1' : '0') + '" class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
         infoRow(PIN, 'Where', run.location, false, true) +
         infoRow(CAL, 'When', whenText, true) +
         (run.duration_minutes ? infoRow(CLOCK, 'Duration', fmtDuration(run.duration_minutes), false) : '') +
@@ -1069,7 +1077,7 @@
           '<button id="kudos-btn" type="button" aria-pressed="' + (kudosOn ? 'true' : 'false') + '" class="w-full flex items-center gap-3 px-4 py-4 rounded-2xl ' +
           (kudosOn
             ? 'bg-[#0a68e0] text-white text-[19px] font-semibold'
-            : 'bg-white dark:bg-[#1c1c20] text-[19px] font-medium') + '">' +
+            : 'bg-white dark:bg-[#1c1c20] border border-[#ececf0] dark:border-[#2c2c31] text-[19px] font-medium') + '">' +
           '<svg class="shrink-0" width="22" height="22" viewBox="0 0 24 24" fill="' + (kudosOn ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-9.3-9.1C1.4 7.7 3.6 4.5 6.9 4.5c2 0 3.6 1.1 4.4 2.7.8-1.6 2.4-2.7 4.4-2.7 3.3 0 5.5 3.2 2.2 8.4C16.4 15.4 12 20 12 20z"/></svg>' +
           '<span>Kudos</span>' +
           '<span id="kudos-count" class="ml-auto">' + (run.kudos_count || 0) + '</span>' +
@@ -1078,7 +1086,7 @@
 
       var rows = (attendees || []).map(function (a) {
         var badge = a.is_organizer
-          ? '<span class="px-2 py-0.5 rounded-md bg-[#dbeafe] dark:bg-[#12243d] text-[#0854c0] dark:text-[#6fb4ff] text-[14px] font-semibold">Organizer</span>'
+          ? '<span class="px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[14px] font-semibold">Organizer</span>'
           : '';
         return '<div class="flex items-center gap-3 px-4 py-3.5">' +
           avatarHtml(a.username, 'lg') +
@@ -1090,12 +1098,12 @@
       var going = '<div>' +
         '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">WHO\'S GOING</h3>' +
         (rows
-          ? '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' + rows + '</div>'
-          : '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl px-4 py-8 text-center text-[17px] text-[#62626a] dark:text-[#b0b0b8]">Nobody has joined yet.</div>') +
+          ? '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' + rows + '</div>'
+          : '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] px-4 py-8 text-center text-[17px] text-[#62626a] dark:text-[#b0b0b8]">Nobody has joined yet.</div>') +
       '</div>';
 
       var footnote = '<p class="flex items-start gap-2 px-1 pb-2 text-[15px] leading-snug text-[#62626a] dark:text-[#b0b0b8]">' +
-        '<svg class="mt-0.5 shrink-0 text-[#0854c0] dark:text-[#6fb4ff]" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.1"/></svg>' +
+        '<svg class="mt-0.5 shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.1"/></svg>' +
         (isPast
           ? 'This run has already happened.'
           : run.is_organizer
@@ -1118,7 +1126,7 @@
     }
 
     // Whole-literal class strings, same reason as the tab states above.
-    var TF_ON = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]';
+    var TF_ON = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_2px_rgba(0,0,0,0.08)]';
     var TF_OFF = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none';
 
     function renderTimeFormat() {
@@ -1245,7 +1253,9 @@
     }
 
     // Whole-literal class strings, same reason as the tab states above.
-    var CHIP_ON = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#0a68e0] text-white';
+    // A selected filter lifts as a raised neutral surface instead of filling
+    // blue: selection reads through contrast, not hue.
+    var CHIP_ON = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
     var CHIP_OFF = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]';
 
     function renderDistFilter() {
@@ -1335,10 +1345,11 @@
     var RUN_TIMES = [[6, 0], [6, 30], [7, 0], [8, 0], [12, 0], [17, 30], [18, 0], [18, 30]];
 
     // Whole-literal class strings: the Tailwind extractor never sees an
-    // assembled one. ON matches the Tomorrow badge on the list.
+    // assembled one. ON lifts as a raised neutral surface, the same rule as
+    // the tabs and the filter chips, instead of a blue tint.
     var PICK_BASE = 'shrink-0 rounded-full border px-3.5 py-2 text-[15px] ';
     var PICK_CLASS = {
-      on: PICK_BASE + 'bg-[#dbeafe] dark:bg-[#12243d] text-[#0854c0] dark:text-[#6fb4ff] border-transparent font-semibold',
+      on: PICK_BASE + 'bg-white dark:bg-[#38383d] border-transparent text-[#111114] dark:text-white font-semibold shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]',
       off: PICK_BASE + 'border-[#e4e4ea] dark:border-[#33333a] text-[#111114] dark:text-[#f2f2f7]',
       disabled: PICK_BASE + 'border-[#e4e4ea] dark:border-[#33333a] text-[#111114] dark:text-[#f2f2f7] opacity-40',
     };
@@ -1542,18 +1553,18 @@
         '</div>' +
         '<div class="mt-5 space-y-3">' +
           '<label class="' + ROW + '">' +
-            '<svg class="shrink-0 text-[#1d8544] dark:text-[#4ed07f]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
+            '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
             '<span class="' + LABEL + '">Where</span>' +
             '<input id="f-where" type="text" maxlength="120" autocomplete="off" placeholder="e.g. Riverside Park" class="' + FIELD + '">' +
           '</label>' +
           '<div class="' + ROW + '">' +
-            '<svg class="shrink-0 text-[#0854c0] dark:text-[#6fb4ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4"/></svg>' +
+            '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4"/></svg>' +
             '<span class="' + LABEL + '">When</span>' +
             '<input id="f-when" type="datetime-local" required aria-label="Date and time" class="' + FIELD + ' text-right">' +
           '</div>' +
           '<label id="meeting-row" data-map="0" class="' + ROW + ' flex-col items-stretch gap-2">' +
             '<span class="flex items-center gap-3">' +
-              '<svg class="shrink-0 text-[#1d8544] dark:text-[#4ed07f]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
+              '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
               '<span class="' + LABEL + '">Meet at</span>' +
               '<input id="f-meeting" type="text" maxlength="120" autocomplete="off" placeholder="Optional: main gate, fountain" class="' + FIELD + '">' +
             '</span>' +
@@ -1562,7 +1573,7 @@
             '<span id="meeting-thumb" class="hidden px-0 pt-1"></span>' +
           '</label>' +
           '<label id="duration-row" class="' + ROW + '">' +
-            '<svg class="shrink-0 text-[#5b2ca8] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>' +
+            '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>' +
             '<span class="' + LABEL + '">Duration</span>' +
             '<span class="flex-1 min-w-0 flex items-center gap-2">' +
               '<input id="f-duration" type="number" min="1" max="600" step="1" inputmode="numeric" autocomplete="off" placeholder="Optional: 45" class="' + FIELD + ' text-right">' +
@@ -1571,7 +1582,7 @@
           '</label>' +
           '<div id="plan-row" class="' + ROW + ' flex-col items-stretch gap-2.5" role="group" aria-label="Training plan">' +
             '<span class="flex items-center gap-3">' +
-              '<svg class="shrink-0 text-[#0a7aff] dark:text-[#5aa9ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v13H8l-4 4z"/><path d="M9 10h.01M13 10h.01M17 10h.01"/></svg>' +
+              '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v13H8l-4 4z"/><path d="M9 10h.01M13 10h.01M17 10h.01"/></svg>' +
               '<span class="' + LABEL + '">Plan</span>' +
               '<span id="plan-value" class="min-w-0 flex-1 text-right text-[15px] font-medium text-[#b6b6bd] dark:text-[#6f6f78]">Optional</span>' +
             '</span>' +
@@ -1583,7 +1594,7 @@
             '<span id="plan-hint" class="hidden pl-[34px] text-[14px] text-[#6b6b73] dark:text-[#b0b0b8]"></span>' +
           '</div>' +
           '<label id="distance-row" class="' + ROW + '">' +
-            '<svg class="shrink-0 text-[#0854c0] dark:text-[#6fb4ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0M4 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>' +
+            '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0M4 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg>' +
             '<span class="' + LABEL + '">Distance</span>' +
             '<span class="flex-1 min-w-0 flex items-center gap-2">' +
               '<input id="f-distance" type="number" min="0.5" max="200" step="0.5" inputmode="decimal" autocomplete="off" placeholder="Optional: 5" class="' + FIELD + ' text-right">' +
@@ -1591,12 +1602,12 @@
             '</span>' +
           '</label>' +
           '<button id="type-row" type="button" aria-label="Type" class="' + ROW + ' w-full text-left">' +
-            '<svg class="shrink-0 text-[#5b2ca8] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01"/></svg>' +
+            '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01"/></svg>' +
             '<span class="' + LABEL + '">Type</span>' +
             '<span id="type-value" class="min-w-0 flex-1 text-right text-[17px] text-[#65656c] dark:text-[#b0b0b8]">Optional</span>' +
           '</button>' +
           '<label class="' + ROW + '">' +
-            '<svg class="shrink-0 text-[#5b2ca8] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5zM14 3v5h5"/></svg>' +
+            '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5zM14 3v5h5"/></svg>' +
             '<span class="' + LABEL + '">Note</span>' +
             '<input id="f-note" type="text" maxlength="200" autocomplete="off" placeholder="Optional: easy 5k pace" class="' + FIELD + '">' +
           '</label>' +
@@ -1707,7 +1718,7 @@
         if (preset) {
           distance.value = preset.distance;
           planValueEl.textContent = preset.label;
-          planValueEl.className = 'min-w-0 flex-1 text-right text-[15px] font-medium text-[#0a7aff] dark:text-[#5aa9ff]';
+          planValueEl.className = 'min-w-0 flex-1 text-right text-[15px] font-medium text-[#111114] dark:text-[#f2f2f7]';
           planHintEl.textContent = preset.hint;
           planHintEl.classList.remove('hidden');
         } else {
@@ -1804,7 +1815,7 @@
         typeValue = v || '';
         if (typeValue) {
           typeValueEl.textContent = typeValue;
-          typeValueEl.className = 'min-w-0 flex-1 text-right text-[17px] text-[#0854c0] dark:text-[#6fb4ff] font-medium';
+          typeValueEl.className = 'min-w-0 flex-1 text-right text-[17px] text-[#111114] dark:text-[#f2f2f7] font-medium';
         } else {
           typeValueEl.textContent = 'Optional';
           typeValueEl.className = 'min-w-0 flex-1 text-right text-[17px] text-[#65656c] dark:text-[#b0b0b8]';
