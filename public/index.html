@@ -318,22 +318,22 @@
         </div>
       </header>
 
-      <div class="mt-6 grid grid-cols-2 gap-1 p-1 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[14px]">
+      <div class="mt-5 grid grid-cols-2 gap-1 p-1 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[14px]">
         <button id="tab-upcoming" type="button" data-tab="upcoming"
-          class="rounded-[11px] py-2.5 text-[17px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_3px_rgba(0,0,0,0.08)]">Upcoming</button>
+          class="rounded-[11px] py-2 text-[16px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]">Upcoming</button>
         <button id="tab-past" type="button" data-tab="past"
-          class="rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none">Past</button>
+          class="rounded-[11px] py-2 text-[16px] font-medium bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none">Past</button>
       </div>
 
       <label for="member-search" class="sr-only">Search runs by member name</label>
       <input id="member-search" type="search" placeholder="Search by member name"
-        autocomplete="off" class="mt-3 w-full px-4 py-2.5 text-[17px] rounded-[14px]
+        autocomplete="off" class="mt-2.5 w-full px-4 py-2.5 text-[17px] rounded-[14px]
         bg-white dark:bg-[#1c1c20] text-[#111114] dark:text-white
         border border-[#ececf0] dark:border-[#2c2c31]
         placeholder:text-[#8e8e93] dark:placeholder:text-[#98989f]
-        shadow-[0_1px_3px_rgba(0,0,0,0.08)] outline-none focus:ring-2 focus:ring-[#0a68e0]/40" />
+        border border-[#ececf0] dark:border-[#2c2c31] outline-none focus:ring-2 focus:ring-[#0a68e0]/40" />
 
-      <div class="mt-6 mb-3 px-1 flex items-center justify-between gap-3">
+      <div class="mt-8 mb-2.5 px-1 flex items-center justify-between gap-3">
         <h2 id="list-heading" class="text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">UPCOMING RUNS</h2>
         <div id="time-format" role="group" aria-label="Time format"
           class="shrink-0 flex items-center gap-0.5 p-0.5 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[10px]">
@@ -346,7 +346,7 @@
         </div>
       </div>
       <div id="dist-filter" role="group" aria-label="Filter by distance"
-        class="mt-4 mb-3 flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
         <button id="dist-5k" type="button" data-dist="5k" aria-pressed="false"
           class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">5K</button>
         <button id="dist-10k" type="button" data-dist="10k" aria-pressed="false"
@@ -354,7 +354,7 @@
         <button id="dist-half" type="button" data-dist="half" aria-pressed="false"
           class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">Half</button>
       </div>
-      <div id="run-list" class="space-y-3"></div>
+      <div id="run-list" class="space-y-3.5"></div>
     </section>
 
     <!-- ── Run details ──────────────────────────────────────────────── -->
@@ -908,7 +908,7 @@
           : '<button type="button" class="join-btn shrink-0 px-6 py-2.5 rounded-full bg-[#0a68e0] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0">Join</button>';
       }
 
-      return '<div class="run-card un-pressable bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]" role="button" tabindex="0" data-id="' + run.id + '">' +
+      return '<div class="run-card un-pressable bg-white dark:bg-[#1c1c20] rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.08)]" role="button" tabindex="0" data-id="' + run.id + '">' +
         '<div class="flex gap-3">' + mediaHtml(run) +
           '<div class="min-w-0 flex-1">' +
             '<h3 class="text-[19px] font-bold leading-tight truncate">' + esc(run.location) + '</h3>' +
@@ -959,8 +959,8 @@
       listEl.innerHTML = shown.map(cardHtml).join('');
     }
 
-    var TAB_ON = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_3px_rgba(0,0,0,0.08)]';
-    var TAB_OFF = 'rounded-[11px] py-2.5 text-[17px] font-medium bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none';
+    var TAB_ON = 'rounded-[11px] py-2 text-[16px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]';
+    var TAB_OFF = 'rounded-[11px] py-2 text-[16px] font-medium bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none';
 
     function renderTabs() {
       document.getElementById('tab-upcoming').className =
