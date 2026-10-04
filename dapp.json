@@ -255,6 +255,18 @@
       "expectText": "3"
     },
     {
+      "name": "Run detail shows the comment thread",
+      "path": "/#run/900001",
+      "expectSelector": "#comments-section #comment-list",
+      "expectText": "Staging demo comment: bringing the water vests."
+    },
+    {
+      "name": "Comments render newest last",
+      "path": "/#run/900001",
+      "expectSelector": "#comment-list .comment-delete",
+      "expectText": "save me a spot"
+    },
+    {
       "name": "Home shows distance filter chips",
       "path": "/",
       "expectSelector": "#dist-filter #dist-5k"
