@@ -6,24 +6,27 @@ Built on Usernode Social Vibecoding.
 
 ## What it does
 
-- **Home** lists runs under two tabs, **Upcoming** and **Past**. Each card
-  shows where the run is, a Today / Tomorrow / date badge with the start
-  time, an optional note, who is going, and a Join button.
-- **New Run** is a bottom sheet behind the + button: where, when, and an
-  optional note. Posting a run makes you its organizer and counts you as
-  going.
+- **Home** lists runs under two tabs, **Upcoming** and **Past**. A row of
+  distance filter chips (5K / 10K / Half) above the board narrows it; with
+  no chip active every run shows. Each card shows where the run is, a
+  Today / Tomorrow / date badge with the start time, an optional distance,
+  an optional note, who is going, and a Join button.
+- **New Run** is a bottom sheet behind the + button: where, when, and
+  optional distance and note. Posting a run makes you its organizer and
+  counts you as going.
 - **Run details** shows the run, its organizer, everyone who has joined,
   and Join / Leave. Organizers can cancel the run from the ... menu.
 
 Two deep links reach those screens directly: `#new` opens the New Run
-sheet, `#run/<id>` opens a run's details.
+sheet, `#run/<id>` opens a run's details. A `?dist=` query param
+pre-activates distance chips for one load, e.g. `/?dist=5k`.
 
 ## Data model
 
 Two public tables, both created idempotently on boot in `server.js`:
 
-- `runs` — one row per planned run (location, optional note, start time,
-  organizer id and username).
+- `runs` — one row per planned run (location, optional note and distance
+  in km, start time, organizer id and username).
 - `run_attendees` — who is going, one row per (run, user). The organizer is
   inserted here when the run is created and cannot leave; cancelling the
   run deletes the attendees with it.
