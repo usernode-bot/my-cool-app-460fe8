@@ -1,8 +1,6 @@
 {
   "name": "Run Club",
-  "icon": {
-    "emoji": "🏃"
-  },
+  "icon": { "image": "brand/icon.png", "emoji": "🏃" },
   "secrets": [],
   "tests": [
     {
@@ -26,6 +24,11 @@
       "expectSelector": "#duration-row"
     },
     {
+      "name": "New Run sheet shows the minutes unit beside Duration",
+      "path": "/#new",
+      "expectSelector": "#duration-row .un-unit[data-unit='mins']"
+    },
+    {
       "name": "New Run sheet offers day picks",
       "path": "/#new",
       "expectSelector": "#when-days [data-day='today']"
@@ -47,7 +50,8 @@
       "expectSelector": "#when-summary .run-time",
       "visual": true,
       "impact": [
-        "public/**"
+        "public/**",
+        "server.js"
       ]
     },
     {
@@ -110,6 +114,17 @@
       "expectText": "staging-demo-maya"
     },
     {
+      "name": "Board search filters by member name",
+      "path": "/?q=staging-demo-sasha",
+      "expectSelector": "#member-search",
+      "expectText": "Staging demo: Riverside Park, main gate"
+    },
+    {
+      "name": "Board search shows a friendly empty state",
+      "path": "/?q=nobody-matches",
+      "expectText": "No runs match"
+    },
+    {
       "name": "Time format defaults to Auto",
       "path": "/",
       "expectSelector": "#app[data-time-format-mode='auto'] #tf-auto[aria-pressed='true']"
@@ -157,7 +172,11 @@
       "expectSelector": "#detail-body .staticmap",
       "expectText": "Staging demo: Main gate",
       "visual": true,
-      "impact": ["public/index.html", "styles/**", "server.js"]
+      "impact": [
+        "public/index.html",
+        "styles/**",
+        "server.js"
+      ]
     },
     {
       "id": "home.display-mode",
@@ -175,6 +194,18 @@
       "name": "Home renders in dark mode",
       "path": "/?theme=dark",
       "expectSelector": "html.dark #app #theme-btn[data-theme-mode='dark'][aria-label='Display mode: Dark']"
+    },
+    {
+      "id": "a11y.contrast-dark-home",
+      "name": "Home renders the AA contrast palette in dark mode",
+      "path": "/?theme=dark",
+      "expectSelector": "html.dark #screen-home .run-card",
+      "visual": true,
+      "impact": [
+        "public/index.html",
+        "tailwind.config.js",
+        "styles/**"
+      ]
     },
     {
       "name": "Run details renders in dark mode",
@@ -234,6 +265,99 @@
       "path": "/#run/900001",
       "expectSelector": "#comment-list .comment-delete",
       "expectText": "save me a spot"
+    },
+    {
+      "name": "Home shows distance filter chips",
+      "path": "/",
+      "expectSelector": "#dist-filter #dist-5k"
+    },
+    {
+      "name": "5K chip filters the board to 5K runs",
+      "path": "/?dist=5k",
+      "expectSelector": "#dist-5k[aria-pressed='true']",
+      "expectText": "Staging demo: Riverside Park"
+    },
+    {
+      "name": "10K chip filters the board to 10K runs",
+      "path": "/?dist=10k",
+      "expectSelector": "#dist-10k[aria-pressed='true']",
+      "expectText": "Staging demo: Harbor Promenade"
+    },
+    {
+      "name": "Half chip filters the board to half marathons",
+      "path": "/?dist=half#tab-past",
+      "expectSelector": "#dist-half[aria-pressed='true']",
+      "expectText": "Staging demo: Old Town loop"
+    },
+    {
+      "id": "home.dist-chips",
+      "name": "Distance filter chips above the runs board",
+      "path": "/?dist=5k",
+      "expectSelector": "#dist-filter #dist-5k[aria-pressed='true']",
+      "visual": true,
+      "impact": [
+        "public/**",
+        "server.js"
+      ]
+    },
+    {
+      "name": "New Run sheet shows the Distance row",
+      "path": "/#new",
+      "expectSelector": "#distance-row"
+    },
+    {
+      "name": "New Run sheet shows the km unit beside Distance",
+      "path": "/#new",
+      "expectSelector": "#distance-row .un-unit[data-unit='km']"
+    },
+    {
+      "name": "Run detail shows the Distance row",
+      "path": "/#run/900001",
+      "expectSelector": "#detail-body [data-distance='1']",
+      "expectText": "5 km"
+    },
+    {
+      "name": "Distanceless run detail keeps its facts unchanged",
+      "path": "/#run/900004",
+      "expectSelector": "#detail-body [data-distance='0']"
+    },
+    {
+      "name": "New Run sheet shows the training plan picker",
+      "path": "/#new",
+      "expectSelector": "#plan-row"
+    },
+    {
+      "name": "New Run sheet offers the 5K preset",
+      "path": "/#new",
+      "expectSelector": "#plan-5k"
+    },
+    {
+      "name": "5K preset pre-fills the distance field",
+      "path": "/?plan=5k#new",
+      "expectSelector": "#plan-row[data-plan='5k'] #plan-5k[aria-pressed='true']",
+      "expectText": "km a week"
+    },
+    {
+      "name": "Half marathon preset pre-fills 21.1 km",
+      "path": "/?plan=half#new",
+      "expectSelector": "#plan-row[data-plan='half'] #plan-half[aria-pressed='true']",
+      "expectText": "km a week"
+    },
+    {
+      "id": "new-run.plan-picker",
+      "name": "Training plan preset pre-fills the New Run sheet",
+      "path": "/?plan=half#new",
+      "expectSelector": "#plan-row[data-plan='half']",
+      "visual": true,
+      "impact": [
+        "public/**"
+      ]
+    },
+    {
+      "name": "Marathon preset suggests weekly mileage",
+      "path": "/?plan=full#new",
+      "expectSelector": "#plan-row[data-plan='full'] #plan-hint",
+      "expectText": "km a week"
     }
   ],
   "visibility": {
