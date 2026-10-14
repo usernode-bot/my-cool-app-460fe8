@@ -354,6 +354,15 @@
         <button id="dist-half" type="button" data-dist="half" aria-pressed="false"
           class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">Half</button>
       </div>
+      <div id="pace-filter" role="group" aria-label="Filter by pace"
+        class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        <button id="pace-fast" type="button" data-pace="fast" aria-pressed="false"
+          class="pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">Under 5:30</button>
+        <button id="pace-steady" type="button" data-pace="steady" aria-pressed="false"
+          class="pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">5:30 to 6:30</button>
+        <button id="pace-easy" type="button" data-pace="easy" aria-pressed="false"
+          class="pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">Over 6:30</button>
+      </div>
       <div id="run-list" class="space-y-3.5"></div>
     </section>
 
@@ -489,6 +498,7 @@
       me: null,          // resolved from the first API response we own
       timeFormat: 'auto', // mode: 'auto' (follow the locale), '12' or '24'; resolved at boot below
       dist: [],          // active distance chips, e.g. ['5k']; empty shows everything
+      pace: [],          // active pace chips, e.g. ['steady']; empty shows everything
     };
 
     // One definition per chip: the km window it matches and the words the
@@ -508,6 +518,35 @@
 
     function activeDistanceFilters() {
       return state.dist.filter(function (id) { return !!DIST_FILTERS[id]; });
+    }
+
+    // One definition per pace chip: the seconds-per-km window it matches and
+    // the words the chip reads. Bands meet at 5:30 and 6:30, so the middle
+    // band takes both boundaries and a run exactly on 5:30 or 6:30 counts as
+    // steady. A run with no planned pace matches every chip, because the
+    // chips can only narrow down runs that said what their pace is.
+    var PACE_FILTERS = {
+      'fast': { max: 330, label: 'Under 5:30' },
+      'steady': { min: 330, max: 390, label: '5:30 to 6:30' },
+      'easy': { min: 390, label: 'Over 6:30' },
+    };
+
+    function paceInRange(run, filterId) {
+      // Number(null) is 0, which would read as a 0:00 pace; test for the
+      // column being unset before converting, so an unmarked run matches
+      // every chip instead of only the fast one.
+      if (run.pace_seconds_per_km == null) return true;
+      var p = Number(run.pace_seconds_per_km);
+      if (!Number.isFinite(p)) return true;
+      var f = PACE_FILTERS[filterId];
+      if (!f) return false;
+      if (f.max === undefined) return p > f.min;
+      if (f.min === undefined) return p < f.max;
+      return p >= f.min && p <= f.max;
+    }
+
+    function activePaceFilters() {
+      return state.pace.filter(function (id) { return !!PACE_FILTERS[id]; });
     }
 
     // Training plan presets for the New Run sheet. Frontend-only: picking
@@ -840,6 +879,17 @@
       return h + ' h' + (rest ? ' ' + rest + ' min' : '');
     }
 
+    // Planned pace as runners write it, minutes and seconds per kilometre
+    // ("6:30"). The "/ km" unit rides with the caller, since the chip and the
+    // detail row word it slightly differently. Not a clock time, so fmtTime
+    // is not involved.
+    function fmtPace(seconds) {
+      var s = Number(seconds);
+      if (!Number.isFinite(s) || s < 1) return '';
+      s = Math.round(s);
+      return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }
+
     function badgeHtml(info) {
       // Today and Tomorrow wear the app's one quiet gray chip, same as the
       // type and distance badges: the label carries the meaning, not a hue.
@@ -968,6 +1018,9 @@
                     : 'bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8]') + '">' + esc(fmtCutoff(run)) + '</span>' : '') +
               (run.distance_km
                 ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[14px] font-semibold">' + esc(fmtKm(run.distance_km)) + '</span>'
+                : '') +
+              (run.pace_seconds_per_km
+                ? '<span data-pace="1" class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[14px] font-semibold">' + esc(fmtPace(run.pace_seconds_per_km)) + ' /km</span>'
                 : '') + '</div>' +
             note +
           '</div>' +
@@ -983,11 +1036,14 @@
     function renderList() {
       headingEl.textContent = state.tab === 'past' ? 'PAST RUNS' : 'UPCOMING RUNS';
       var active = activeDistanceFilters();
-      var shown = active.length
-        ? state.runs.filter(function (run) {
-            return active.some(function (id) { return distInRange(run, id); });
-          })
-        : state.runs;
+      var activePace = activePaceFilters();
+      var shown = state.runs.filter(function (run) {
+        if (active.length &&
+            !active.some(function (id) { return distInRange(run, id); })) return false;
+        if (activePace.length &&
+            !activePace.some(function (id) { return paceInRange(run, id); })) return false;
+        return true;
+      });
       if (!state.runs.length) {
         listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' +
           (state.q
@@ -999,7 +1055,9 @@
       }
       if (!shown.length) {
         listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' +
-          'No runs match these distances. Tap a chip again to clear it.</p>';
+          (activePace.length
+            ? 'No runs match these paces. Tap a chip again to clear it.'
+            : 'No runs match these distances. Tap a chip again to clear it.') + '</p>';
         return;
       }
       listEl.innerHTML = shown.map(cardHtml).join('');
@@ -1107,6 +1165,7 @@
       var CLOCK = 'M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v5l3.5 2';
       var CUTOFF = 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2';
       var DIST_ICON = 'M4 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0M4 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0';
+      var PACE = 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 12l4-3M12 7v1';
       var PEOPLE = 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6 6 0 0112 0M17.5 11.5a3 3 0 100-6M18 20a5.5 5.5 0 00-2-4.3';
 
       // The cutoff reads as a timestamp, so the sentence stays true no
@@ -1121,12 +1180,13 @@
 
       // data-type / data-duration let the checks tell a detailed run from a
       // bare one without asserting on text that may not be there.
-      var facts = '<div data-type="' + (run.type_label ? '1' : '0') + '" data-duration="' + (run.duration_minutes ? '1' : '0') + '" data-cutoff-run="' + (run.rsvp_cutoff_hours ? '1' : '0') + '" data-distance="' + (run.distance_km ? '1' : '0') + '" class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
+      var facts = '<div data-type="' + (run.type_label ? '1' : '0') + '" data-duration="' + (run.duration_minutes ? '1' : '0') + '" data-cutoff-run="' + (run.rsvp_cutoff_hours ? '1' : '0') + '" data-distance="' + (run.distance_km ? '1' : '0') + '" data-pace-run="' + (run.pace_seconds_per_km ? '1' : '0') + '" class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
         infoRow(PIN, 'Where', run.location, false, true) +
         infoRow(CAL, 'When', whenText, true) +
         (run.duration_minutes ? infoRow(CLOCK, 'Duration', fmtDuration(run.duration_minutes), false) : '') +
         (cutoffText ? infoRow(CUTOFF, 'RSVP', cutoffText, false) : '') +
         (run.distance_km ? infoRow(DIST_ICON, 'Distance', fmtKm(run.distance_km), false) : '') +
+        (run.pace_seconds_per_km ? infoRow(PACE, 'Pace', fmtPace(run.pace_seconds_per_km) + ' /km', false) : '') +
         (run.type_label ? infoRow(TAG, 'Type', run.type_label, false) : '') +
         infoRow(PEOPLE, 'Going', count + (count === 1 ? ' runner' : ' runners'), false) +
       '</div>';
@@ -1325,6 +1385,10 @@
     var CHIP_ON = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
     var CHIP_OFF = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]';
 
+    // Same raised-neutral treatment as the distance chips above.
+    var PACE_ON = 'pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
+    var PACE_OFF = 'pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]';
+
     function renderDistFilter() {
       ['5k', '10k', 'half'].forEach(function (id) {
         var btn = document.getElementById('dist-' + id);
@@ -1334,10 +1398,20 @@
       });
     }
 
+    function renderPaceFilter() {
+      ['fast', 'steady', 'easy'].forEach(function (id) {
+        var btn = document.getElementById('pace-' + id);
+        var on = state.pace.indexOf(id) !== -1;
+        btn.className = on ? PACE_ON : PACE_OFF;
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+
     function render() {
       renderTimeFormat();
       renderTabs();
       renderDistFilter();
+      renderPaceFilter();
       renderList();
       renderDetail();
     }
@@ -1668,6 +1742,14 @@
               '<span class="' + UNIT + '" data-unit="km">km</span>' +
             '</span>' +
           '</label>' +
+          '<label id="pace-row" class="' + ROW + '">' +
+            '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a10 10 0 100-20 10 10 0 000 20zM12 12l4-3M12 7v1"/></svg>' +
+            '<span class="' + LABEL + '">Pace</span>' +
+            '<span class="flex-1 min-w-0 flex items-center gap-2">' +
+              '<input id="f-pace" type="text" inputmode="numeric" autocomplete="off" placeholder="Optional: 6:30" class="' + FIELD + ' text-right">' +
+              '<span class="' + UNIT + '" data-unit="/km">/km</span>' +
+            '</span>' +
+          '</label>' +
           '<label id="cutoff-row" class="' + ROW + '">' +
             '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2M12 3v1M12 20v1M4.9 4.9l.7.7M18.4 18.4l.7.7"/></svg>' +
             '<span class="' + LABEL + '">RSVP closes</span>' +
@@ -1755,6 +1837,7 @@
       var duration = contentEl.querySelector('#f-duration');
       var cutoff = contentEl.querySelector('#f-cutoff');
       var distance = contentEl.querySelector('#f-distance');
+      var pace = contentEl.querySelector('#f-pace');
       var note = contentEl.querySelector('#f-note');
       var meetingRow = contentEl.querySelector('#meeting-row');
       var meetingInput = contentEl.querySelector('#f-meeting');
@@ -2081,6 +2164,13 @@
         if (distance.value.trim() !== '') {
           distanceKm = distance.value.trim();
         }
+        // Optional planned pace in "m:ss" per kilometre. Blank means "not
+        // set"; anything else goes to the server as-is and the server owns
+        // validation, so the toast carries its message.
+        var paceStr = null;
+        if (pace.value.trim() !== '') {
+          paceStr = pace.value.trim();
+        }
         post.disabled = true;
         post.textContent = 'Posting...';
         api('/api/runs', {
@@ -2096,6 +2186,7 @@
             duration_minutes: durationMinutes === null ? undefined : durationMinutes,
             rsvp_cutoff_hours: cutoff.value.trim() === '' ? undefined : cutoff.value.trim(),
             distance_km: distanceKm === null ? undefined : distanceKm,
+            pace: paceStr === null ? undefined : paceStr,
             photo_url: photo ? photo.url : undefined,
             photo_file_id: photo ? photo.id : undefined,
           }),
@@ -2384,6 +2475,18 @@
       });
     });
 
+    // Pace chips behave exactly like the distance chips above: multi-
+    // select, toggle on tap, no refetch.
+    ['fast', 'steady', 'easy'].forEach(function (id) {
+      document.getElementById('pace-' + id).addEventListener('click', function () {
+        var at = state.pace.indexOf(id);
+        if (at === -1) state.pace.push(id);
+        else state.pace.splice(at, 1);
+        renderPaceFilter();
+        renderList();
+      });
+    });
+
     /* ── Routing: #new and #run/<id> are the deep links ────────────── */
 
     var suppressHash = false;
@@ -2467,6 +2570,16 @@
       state.dist = linked.split(',').filter(function (id) { return !!DIST_FILTERS[id]; });
     })();
 
+    // A pace deep link for reviewers: ?pace=fast,steady pre-activates
+    // those pace chips for a single load. Same view-state rules as
+    // ?dist= above: no database write, never persisted.
+    (function resolvePace() {
+      var linked = (params.get('pace') || '').toLowerCase();
+      if (!linked) return;
+      state.pace = linked.split(',').map(function (s) { return s.trim(); })
+        .filter(function (id) { return !!PACE_FILTERS[id]; });
+    })();
+
     // A plan deep link for reviewers: the query param pre-selects a
     // training plan preset when the New Run sheet opens. Same single-load
     // rules as ?dist= above: nothing persisted, nothing written, and the
@@ -2478,6 +2591,7 @@
     renderTimeFormat();
     renderTabs();
     renderDistFilter();
+    renderPaceFilter();
     loadRunTypes();
     loadRuns().then(route);
 
