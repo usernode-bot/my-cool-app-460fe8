@@ -119,6 +119,11 @@ const MAX_CUTOFF_HOURS = 72;
 // Planned distance range in kilometres, enforced in POST /api/runs.
 // Optional: a run without one simply never matches a distance chip.
 const MAX_DISTANCE_KM = 200;
+// Planned pace range, entered as "m:ss" per kilometre and stored as whole
+// seconds so the pace chips can compare it numerically. Optional: a run
+// without one simply never matches a pace chip either.
+const MIN_PACE_SECONDS = 3 * 60;
+const MAX_PACE_SECONDS = 12 * 60;
 // Preset run types. Keep in sync with PRESET_TYPES in public/index.html:
 // the server is authoritative for validation, the frontend list drives the
 // picker, and a label is only valid if BOTH sides know it.
@@ -145,7 +150,7 @@ const RUN_SELECT = `
   SELECT r.id, r.location, r.note, r.starts_at,
          r.organizer_id, r.organizer_username,
          r.photo_url, r.photo_file_id, r.type_label, r.duration_minutes,
-         r.distance_km,
+         r.distance_km, r.pace_seconds_per_km,
          r.meeting_point, r.meeting_lat, r.meeting_lng,
          r.rsvp_cutoff_hours,
          (SELECT COUNT(*) FROM run_attendees a WHERE a.run_id = r.id)::int
@@ -434,6 +439,19 @@ app.post('/api/runs', async (req, res) => {
     }
     distanceKm = Math.round(parsed * 10) / 10;
   }
+  // Planned pace is optional, entered as "m:ss" per kilometre and stored
+  // as whole seconds. Not a clock time, so it is written as minutes and
+  // seconds, never through the date parser.
+  const rawPace = req.body?.pace;
+  let paceSeconds = null;
+  if (rawPace !== undefined && rawPace !== null && String(rawPace).trim() !== '') {
+    const m = String(rawPace).trim().match(/^(\d{1,2}):([0-5]\d)$/);
+    const seconds = m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    if (!seconds || seconds < MIN_PACE_SECONDS || seconds > MAX_PACE_SECONDS) {
+      return res.status(400).json({ error: 'Pace must be between 3:00 and 12:00 per km.' });
+    }
+    paceSeconds = seconds;
+  }
 
   const client = await pool.connect();
   try {
@@ -441,8 +459,8 @@ app.post('/api/runs', async (req, res) => {
     // together or not at all.
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id, type_label, duration_minutes, distance_km, meeting_point, meeting_lat, meeting_lng, rsvp_cutoff_hours)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id, type_label, duration_minutes, distance_km, pace_seconds_per_km, meeting_point, meeting_lat, meeting_lng, rsvp_cutoff_hours)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
       [
         location,
         rawNote || null,
@@ -454,6 +472,7 @@ app.post('/api/runs', async (req, res) => {
         typeLabel,
         durationMinutes,
         distanceKm,
+        paceSeconds,
         rawMeeting || null,
         rawMeeting ? meetingLat : null,
         rawMeeting ? meetingLng : null,
@@ -830,6 +849,8 @@ const SEED_PHOTO_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/
 
 // Seeded run ids live far above anything the app will ever allocate, so a
 // re-boot can address the same demo rows by id.
+// Pace is seconds per kilometre, spread so each pace band chip has at least
+// one match: 300/330 under or on 5:30, 390/420 in the middle band, 540 over.
 const SEED_RUNS = [
   {
     id: 900001,
@@ -838,6 +859,7 @@ const SEED_RUNS = [
     type: 'Staging demo: Trail',
     duration: 30,
     distance: 5,
+    pace: 390,
     dayOffset: 0,
     hour: 18,
     minute: 30,
@@ -857,6 +879,7 @@ const SEED_RUNS = [
     type: null,
     dayOffset: 1,
     distance: 10,
+    pace: 300,
     hour: 7,
     minute: 0,
     organizer: [-902, 'staging-demo-ethan'],
@@ -876,6 +899,7 @@ const SEED_RUNS = [
     // below always sit on the correct side of their cutoff.
     inHours: 48,
     cutoffHours: 2,
+    pace: 540,
     organizer: [-903, 'staging-demo-nina'],
     joiners: [],
   },
@@ -888,6 +912,7 @@ const SEED_RUNS = [
     // hour ago: the lock is already on at every boot, in every timezone.
     inHours: 2,
     cutoffHours: 3,
+    pace: 420,
     organizer: [-902, 'staging-demo-ethan'],
     joiners: [],
   },
@@ -898,6 +923,7 @@ const SEED_RUNS = [
     type: null,
     dayOffset: -3,
     distance: 21,
+    pace: 330,
     hour: 8,
     minute: 0,
     organizer: [-903, 'staging-demo-nina'],
@@ -909,6 +935,7 @@ const SEED_RUNS = [
     note: null,
     type: null,
     dayOffset: 2,
+    pace: 540,
     hour: 9,
     minute: 0,
     organizer: [-901, 'staging-demo-maya'],
@@ -939,11 +966,12 @@ function seedStartsIn(hours) {
 async function seedStaging() {
   for (const run of SEED_RUNS) {
     await pool.query(
-      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url, type_label, duration_minutes, distance_km, meeting_point, meeting_lat, meeting_lng, rsvp_cutoff_hours)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url, type_label, duration_minutes, distance_km, pace_seconds_per_km, meeting_point, meeting_lat, meeting_lng, rsvp_cutoff_hours)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        ON CONFLICT (id) DO UPDATE SET starts_at = EXCLUDED.starts_at,
          duration_minutes = EXCLUDED.duration_minutes,
          distance_km = EXCLUDED.distance_km,
+         pace_seconds_per_km = EXCLUDED.pace_seconds_per_km,
          rsvp_cutoff_hours = EXCLUDED.rsvp_cutoff_hours`,
       [
         run.id,
@@ -956,6 +984,7 @@ async function seedStaging() {
         run.type || null,
         run.duration || null,
         run.distance || null,
+        run.pace || null,
         run.meeting || null,
         run.meeting ? run.meetingLat : null,
         run.meeting ? run.meetingLng : null,
@@ -1136,6 +1165,13 @@ async function migrate() {
   await pool.query(`
     ALTER TABLE runs
       ADD COLUMN IF NOT EXISTS rsvp_cutoff_hours SMALLINT
+  `);
+  // Optional planned pace, in whole seconds per kilometre. NULL means no
+  // pace, which is every run posted before this feature and every run
+  // posted without one; a NULL pace matches every pace filter chip.
+  await pool.query(`
+    ALTER TABLE runs
+      ADD COLUMN IF NOT EXISTS pace_seconds_per_km INTEGER
   `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS run_type_labels (

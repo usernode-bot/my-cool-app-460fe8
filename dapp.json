@@ -380,6 +380,35 @@
       "path": "/?plan=full#new",
       "expectSelector": "#plan-row[data-plan='full'] #plan-hint",
       "expectText": "km a week"
+    },
+    {
+      "id": "home.pace-chips",
+      "name": "Pace filter chips select runs in the band",
+      "path": "/?pace=fast,steady",
+      "expectSelector": "#pace-filter #pace-fast[aria-pressed='true']",
+      "expectText": "Staging demo: Riverside Park",
+      "visual": true,
+      "impact": [
+        "public/**",
+        "server.js"
+      ]
+    },
+    {
+      "name": "Run cards show the planned pace chiplet",
+      "path": "/",
+      "expectSelector": ".run-card [data-pace='1']",
+      "expectText": "6:30 /km"
+    },
+    {
+      "name": "New Run sheet has an optional pace row",
+      "path": "/#new",
+      "expectSelector": "#pace-row .un-unit[data-unit='/km']"
+    },
+    {
+      "name": "Run detail shows the pace facts row",
+      "path": "/#run/900001",
+      "expectSelector": "#detail-body [data-pace-run='1']",
+      "expectText": "6:30 /km"
     }
   ],
   "visibility": {
