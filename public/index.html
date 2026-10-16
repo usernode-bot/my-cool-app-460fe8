@@ -64,7 +64,7 @@
   })();
   </script>
   <title>Run Club</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%230a7aff'/><text x='50' y='68' font-size='52' text-anchor='middle'>%F0%9F%8F%83</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23c2410c'/><text x='50' y='68' font-size='52' text-anchor='middle'>%F0%9F%8F%83</text></svg>">
 
   <!-- Display mode (theme). This runs BEFORE the stylesheet and before any
        markup, because the `dark` class it writes onto <html> is what the
@@ -240,10 +240,10 @@
       src: url(/fonts/quicksand-latin-ext.woff2) format('woff2');
       unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
     }
-    /* Re-theme the kit to Run Club's blue. Physics and geometry stay the
-       kit's; only the color tokens are ours. */
+    /* Re-theme the kit to Run Club's track orange. Physics and geometry
+       stay the kit's; only the color tokens are ours. */
     :root {
-      --un-accent: #0a68e0;
+      --un-accent: #c2410c;
       --un-accent-contrast: #ffffff;
       --un-group-bg: #ffffff;
       --un-sheet-bg: #ffffff;
@@ -303,7 +303,10 @@
     <!-- ── Home ─────────────────────────────────────────────────────── -->
     <section id="screen-home" class="px-5 pb-24">
       <header class="flex items-start justify-between gap-4">
-        <h1 class="text-[40px] font-extrabold tracking-tight leading-none pt-1">Run Club</h1>
+        <div>
+          <h1 class="text-[40px] font-extrabold tracking-tight leading-none pt-1">Run Club</h1>
+          <p id="app-tagline" class="mt-1.5 text-[15px] text-[#62626a] dark:text-[#b0b0b8]">Lace up and run together.</p>
+        </div>
         <div class="shrink-0 flex items-center gap-2 pt-0.5">
           <!-- The glyph itself is drawn by renderTheme() so it always shows
                the mode that is actually in force. -->
@@ -331,7 +334,7 @@
         bg-white dark:bg-[#1c1c20] text-[#111114] dark:text-white
         border border-[#ececf0] dark:border-[#2c2c31]
         placeholder:text-[#8e8e93] dark:placeholder:text-[#98989f]
-        border border-[#ececf0] dark:border-[#2c2c31] outline-none focus:ring-2 focus:ring-[#0a68e0]/40" />
+        border border-[#ececf0] dark:border-[#2c2c31] outline-none focus:ring-2 focus:ring-[#c2410c]/40" />
 
       <div class="mt-8 mb-2.5 px-1 flex items-center justify-between gap-3">
         <h2 id="list-heading" class="text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">UPCOMING RUNS</h2>
@@ -411,6 +414,15 @@
     // server is authoritative for validation, this list drives the picker,
     // and a label is only valid if BOTH sides know it.
     var PRESET_TYPES = ['Easy', 'Tempo', 'Long Run', 'Intervals', 'Race'];
+    // One-line descriptions for the type picker menu, keyed by preset
+    // name. Menu rows carry a single line, so the hint rides in the label.
+    var PRESET_HINTS = {
+      'Easy': 'relaxed, chatty pace',
+      'Tempo': 'steady and comfortably hard',
+      'Long Run': 'more distance, slower pace',
+      'Intervals': 'fast repeats with rests',
+      'Race': 'an event or time trial',
+    };
 
     /* ── Meeting-point pin: static map thumbnail ───────────────────── */
 
@@ -977,7 +989,7 @@
       if (past) {
         var mine = run.kudos_from_me;
         var kudosCls = mine
-          ? 'kudos-btn shrink-0 px-4 py-2 rounded-full bg-[#0a68e0] text-white text-[15px] font-semibold'
+          ? 'kudos-btn shrink-0 px-4 py-2 rounded-full bg-[#c2410c] text-white text-[15px] font-semibold'
           : 'kudos-btn shrink-0 px-4 py-2 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[15px] font-semibold';
         kudos = '<button type="button" class="' + kudosCls + '" data-id="' + run.id + '"' +
           (mine ? ' aria-pressed="true"' : '') +
@@ -996,7 +1008,7 @@
         } else if (locked) {
           action = '<span class="shrink-0 px-3 py-1 rounded-full bg-[#ffe4e2] dark:bg-[#3a1715] text-[#ff3b30] dark:text-[#ff6961] text-[15px] font-semibold">RSVP closed</span>';
         } else {
-          action = '<button type="button" class="join-btn shrink-0 px-6 py-2.5 rounded-full bg-[#0a68e0] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0">Join</button>';
+          action = '<button type="button" class="join-btn shrink-0 px-6 py-2.5 rounded-full bg-[#c2410c] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0">Join</button>';
         }
       }
 
@@ -1049,8 +1061,8 @@
           (state.q
             ? 'No runs match "' + esc(state.q) + '". Try another name.'
             : state.tab === 'past'
-            ? 'No past runs yet.'
-            : 'No upcoming runs. Tap + to post one.') + '</p>';
+            ? 'No past runs yet. Finished runs show up here.'
+            : 'No upcoming runs. Lace up and tap + to post one.') + '</p>';
         return;
       }
       if (!shown.length) {
@@ -1101,7 +1113,7 @@
         } else if (locked) {
           action = '<span id="rsvp-closed" class="shrink-0 px-3 py-1 rounded-full bg-[#ffe4e2] dark:bg-[#3a1715] text-[#ff3b30] dark:text-[#ff6961] text-[15px] font-semibold">RSVPs closed</span>';
         } else {
-          action = '<button id="detail-action" type="button" data-action="join" class="shrink-0 px-7 py-2.5 rounded-full bg-[#0a68e0] text-white text-[17px] font-semibold">Join</button>';
+          action = '<button id="detail-action" type="button" data-action="join" class="shrink-0 px-7 py-2.5 rounded-full bg-[#c2410c] text-white text-[17px] font-semibold">Join</button>';
         }
       }
 
@@ -1199,7 +1211,7 @@
         kudosCard =
           '<button id="kudos-btn" type="button" aria-pressed="' + (kudosOn ? 'true' : 'false') + '" class="w-full flex items-center gap-3 px-4 py-4 rounded-2xl ' +
           (kudosOn
-            ? 'bg-[#0a68e0] text-white text-[19px] font-semibold'
+            ? 'bg-[#c2410c] text-white text-[19px] font-semibold'
             : 'bg-white dark:bg-[#1c1c20] border border-[#ececf0] dark:border-[#2c2c31] text-[19px] font-medium') + '">' +
           '<svg class="shrink-0" width="22" height="22" viewBox="0 0 24 24" fill="' + (kudosOn ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-9.3-9.1C1.4 7.7 3.6 4.5 6.9 4.5c2 0 3.6 1.1 4.4 2.7.8-1.6 2.4-2.7 4.4-2.7 3.3 0 5.5 3.2 2.2 8.4C16.4 15.4 12 20 12 20z"/></svg>' +
           '<span>Kudos</span>' +
@@ -1276,9 +1288,9 @@
     // Everything here is presentation: which glyph the header shows and
     // which menu the tap opens.
     var THEME_META = {
-      dark: { label: 'Dark', glyph: '<path d="M20.5 14.7A8.6 8.6 0 019.3 3.5a8.6 8.6 0 1011.2 11.2z"/>' },
-      light: { label: 'Light', glyph: '<circle cx="12" cy="12" r="4.1"/><path d="M12 2.6v2.1M12 19.3v2.1M2.6 12h2.1M19.3 12h2.1M5.3 5.3l1.5 1.5M17.2 17.2l1.5 1.5M18.7 5.3l-1.5 1.5M6.8 17.2l-1.5 1.5"/>' },
-      system: { label: 'System', glyph: '<rect x="3" y="4.3" width="18" height="12.4" rx="2.1"/><path d="M9 20.2h6"/>' },
+      dark: { label: 'Dark', menu: 'Dark', glyph: '<path d="M20.5 14.7A8.6 8.6 0 019.3 3.5a8.6 8.6 0 1011.2 11.2z"/>' },
+      light: { label: 'Light', menu: 'Light', glyph: '<circle cx="12" cy="12" r="4.1"/><path d="M12 2.6v2.1M12 19.3v2.1M2.6 12h2.1M19.3 12h2.1M5.3 5.3l1.5 1.5M17.2 17.2l1.5 1.5M18.7 5.3l-1.5 1.5M6.8 17.2l-1.5 1.5"/>' },
+      system: { label: 'System', menu: 'Same as my device', glyph: '<rect x="3" y="4.3" width="18" height="12.4" rx="2.1"/><path d="M9 20.2h6"/>' },
     };
 
     function themeSvg(mode, size) {
@@ -1329,14 +1341,14 @@
         return {
           // The kit has no checked state for a row, so the active one is
           // marked in its own label.
-          label: THEME_META[mode].label + (mode === current ? '  ✓' : ''),
+          label: THEME_META[mode].menu + (mode === current ? '  ✓' : ''),
           value: mode,
           iconEl: themeIconEl(mode),
         };
       });
       unNative.menu({
         anchorEl: anchorEl,
-        title: 'Display mode',
+        title: 'Display mode: how the app looks',
         items: items,
         cancelLabel: 'Close',
       }).then(function (choice) {
@@ -1418,7 +1430,9 @@
 
     /* -- Time format menu (run details) ---------------------------- */
 
-    var FORMAT_LABELS = { auto: 'Auto', '12': 'AM/PM', '24': '24h' };
+    // Fixed sample times in the labels, not rendered run times, so
+    // fmtTime does not apply here.
+    var FORMAT_LABELS = { auto: 'Auto: follow my language', '12': '12 hour: 7:00 AM', '24': '24 hour: 19:00' };
     var FORMAT_ORDER = ['auto', '12', '24'];
 
     // Same shape as the Display mode menu: a titled list with the current
@@ -1431,7 +1445,7 @@
       }
       unNative.menu({
         anchorEl: anchorEl,
-        title: 'Time format',
+        title: 'Time format: how run times show',
         items: FORMAT_ORDER.map(function (value) {
           return { label: FORMAT_LABELS[value] + (value === current ? '  ✓' : ''), value: value };
         }),
@@ -1779,7 +1793,7 @@
             '</div>' +
           '</div>' +
         '</div>' +
-        '<button id="post-run-btn" type="button" disabled class="mt-5 w-full h-[58px] rounded-2xl bg-[#0a68e0] text-white text-[19px] font-semibold disabled:opacity-40">Post run</button>';
+        '<button id="post-run-btn" type="button" disabled class="mt-5 w-full h-[58px] rounded-2xl bg-[#c2410c] text-white text-[19px] font-semibold disabled:opacity-40">Post run</button>';
 
       return wrap;
     }
@@ -2010,9 +2024,9 @@
           anchorEl: typeRow,
           title: own.label,
           items: [
-            { label: 'Use', value: 'use' },
+            { label: 'Use this type', value: 'use' },
             { label: 'Rename', value: 'rename' },
-            { label: 'Delete', destructive: true, value: 'delete' },
+            { label: 'Delete type', destructive: true, value: 'delete' },
           ],
           cancelLabel: 'Cancel',
         }).then(function (choice) {
@@ -2049,15 +2063,15 @@
       function openTypePicker() {
         if (!(window.unNative && unNative.menu)) return;
         var items = PRESET_TYPES.map(function (name) {
-          return { label: name + (typeValue === name ? '  ✓' : ''), value: 'pick|' + name };
+          return { label: name + ': ' + PRESET_HINTS[name] + (typeValue === name ? '  ✓' : ''), value: 'pick|' + name };
         });
         state.customTypes.forEach(function (t) {
           items.push({ label: t.label + (typeValue === t.label ? '  ✓' : ''), value: 'own|' + t.id });
         });
-        items.push({ label: 'Add type', value: 'add' });
+        items.push({ label: 'Add your own type', value: 'add' });
         unNative.menu({
           anchorEl: typeRow,
-          title: 'Type',
+          title: 'Run type: pick the kind of run',
           items: items,
           cancelLabel: 'Cancel',
         }).then(function (choice) {
@@ -2339,16 +2353,16 @@
       if (!state.detail) return;
       var run = state.detail.run;
       var isPast = new Date(run.starts_at).getTime() < Date.now();
-    var items = [];
+      var items = [];
       // Share first: it is relevant to every viewer, while the entries
       // below it only exist in some states.
-      items.push({ label: 'Share', value: 'share' });
+      items.push({ label: 'Share run', value: 'share' });
       // Reminder toggle: only for attendees of a run that has not
       // started, so the menu stays exactly as short as it is today for
       // everyone else. The label is the action the tap performs.
       if (!isPast && run.joined) {
         items.push({
-          label: run.reminders_off ? 'Reminders on' : 'Reminders off',
+          label: run.reminders_off ? 'Turn reminders on' : 'Turn reminders off',
           value: 'reminders',
         });
       }
@@ -2359,8 +2373,8 @@
       }
       // The detail screen shows a time but has no room for the segmented
       // control, so the same choice lives here, one level down.
-      items.push({ label: 'Time format', value: 'timeformat' });
-      unNative.menu({ anchorEl: e.currentTarget, items: items, cancelLabel: 'Cancel' })
+      items.push({ label: 'Change time format', value: 'timeformat' });
+      unNative.menu({ anchorEl: e.currentTarget, title: 'Run options', items: items, cancelLabel: 'Cancel' })
         .then(function (choice) {
           if (!choice) return;
           if (choice.value === 'timeformat') {

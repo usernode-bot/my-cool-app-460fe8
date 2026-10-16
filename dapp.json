@@ -38,6 +38,17 @@
       "expectText": "Join"
     },
     {
+      "name": "Join uses the track orange accent",
+      "path": "/#run/900004",
+      "expectSelector": "#detail-action[data-action='join'].bg-\\[\\#c2410c\\]"
+    },
+    {
+      "name": "Home header shows the running tagline",
+      "path": "/",
+      "expectSelector": "#app-tagline",
+      "expectText": "Lace up"
+    },
+    {
       "name": "Home lists upcoming runs",
       "path": "/",
       "expectText": "Staging demo: Riverside Park"

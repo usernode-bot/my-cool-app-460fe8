@@ -860,6 +860,11 @@ const SEED_RUNS = [
     duration: 30,
     distance: 5,
     pace: 390,
+    // The RSVP row on this run's details is what the "Run detail shows the
+    // RSVP cutoff time" check asserts, so the demo run carries a cutoff.
+    // 2 hours before an 18:30 start keeps it open at most boot times and
+    // the row renders either way ("Closes" or "Closed").
+    cutoffHours: 2,
     dayOffset: 0,
     hour: 18,
     minute: 30,
