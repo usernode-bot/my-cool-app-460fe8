@@ -1127,7 +1127,7 @@
         ? '<img id="detail-photo" src="' + esc(run.photo_url) + '" alt="" class="w-full aspect-[16/9] rounded-2xl object-cover">'
         : '';
 
-      // The meeting point sits between When and Going, per the request, and
+      // The meeting point sits between When and Confirmed, per the request, and
       // is omitted entirely when the run has none. The thumbnail renders at
       // 320px in this stack, so the same zoom that serves the sheet serves it.
       var meeting = (run.meeting_point && run.meeting_lat != null && run.meeting_lng != null)
@@ -1200,7 +1200,7 @@
         (run.distance_km ? infoRow(DIST_ICON, 'Distance', fmtKm(run.distance_km), false) : '') +
         (run.pace_seconds_per_km ? infoRow(PACE, 'Pace', fmtPace(run.pace_seconds_per_km) + ' /km', false) : '') +
         (run.type_label ? infoRow(TAG, 'Type', run.type_label, false) : '') +
-        infoRow(PEOPLE, 'Going', count + (count === 1 ? ' runner' : ' runners'), false) +
+        infoRow(PEOPLE, 'Confirmed', count + (count === 1 ? ' runner' : ' runners'), false) +
       '</div>';
 
       // Kudos live on finished runs only: a full-width tap target below
@@ -1231,10 +1231,11 @@
       }).join('');
 
       var going = '<div>' +
-        '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">WHO\'S GOING</h3>' +
+        '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">CONFIRMED</h3>' +
+        '<p class="-mt-1 mb-2 px-1 text-[15px] leading-snug text-[#62626a] dark:text-[#b0b0b8]">Everyone listed tapped Join. The organizer is always counted.</p>' +
         (rows
           ? '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' + rows + '</div>'
-          : '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] px-4 py-8 text-center text-[17px] text-[#62626a] dark:text-[#b0b0b8]">Nobody has joined yet.</div>') +
+          : '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] px-4 py-8 text-center text-[17px] text-[#62626a] dark:text-[#b0b0b8]">Nobody has confirmed yet.</div>') +
       '</div>';
 
       var footnote = '<p class="flex items-start gap-2 px-1 pb-2 text-[15px] leading-snug text-[#62626a] dark:text-[#b0b0b8]">' +
@@ -1244,10 +1245,10 @@
           : run.is_organizer
             ? 'You are organizing this run. Cancel it from the menu if plans change.'
             : run.joined
-              ? 'Join to be counted as going. You can leave anytime.'
+              ? 'You are confirmed for this run. You can leave anytime.'
               : cutoffLocked(run)
                 ? 'RSVPs are closed. The organizer set a cutoff of ' + Number(run.rsvp_cutoff_hours) + (Number(run.rsvp_cutoff_hours) === 1 ? ' hour' : ' hours') + ' before the start.'
-                : 'Join to be counted as going. You can leave anytime.') + '</p>';
+                : 'Tap Join to confirm you are going. You can leave anytime.') + '</p>';
 
       return banner + summary + facts + meeting + (isPast ? kudosCard : '') + going + footnote;
     }

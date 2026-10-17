@@ -15,7 +15,7 @@
     },
     {
       "name": "Run detail shows the RSVP cutoff time",
-      "path": "/#run/900001",
+      "path": "/#run/900005",
       "expectSelector": "#detail-body [data-cutoff-run='1']",
       "expectText": "RSVP"
     },
@@ -154,9 +154,14 @@
       ]
     },
     {
-      "name": "Run details shows Who's Going",
+      "name": "Run details shows the Confirmed list",
       "path": "/#run/900001",
       "expectText": "staging-demo-maya"
+    },
+    {
+      "name": "Run details explains the Confirmed list",
+      "path": "/#run/900001",
+      "expectText": "Everyone listed tapped Join"
     },
     {
       "name": "Board search filters by member name",
