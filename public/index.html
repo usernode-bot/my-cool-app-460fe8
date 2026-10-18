@@ -575,6 +575,11 @@
     // day/time picks, instead of painting itself blue.
     var PLAN_ON = 'plan-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
     var PLAN_OFF = 'plan-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]';
+    // The Repeats row's own chip pair: copies of the plan states with a
+    // repeat-chip prefix, so the plan handler's .plan-chip query never
+    // picks these up. Whole literals, same reason as everywhere above.
+    var REPEAT_ON = 'repeat-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
+    var REPEAT_OFF = 'repeat-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]';
 
     /* ── Small helpers ─────────────────────────────────────────────── */
 
@@ -1003,12 +1008,20 @@
       var action = '';
       if (!past) {
         var locked = cutoffLocked(run);
+        var full = run.capacity != null && count >= run.capacity;
         if (run.joined) {
-          action = '<button type="button" class="join-btn shrink-0 px-5 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[17px] font-semibold" data-id="' + run.id + '" data-joined="1">Joined</button>';
+          if (run.my_status === 'waitlisted') {
+            // Same quiet gray pill as Joined; the word carries the state.
+            action = '<button type="button" class="join-btn shrink-0 px-5 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[17px] font-semibold" data-id="' + run.id + '" data-joined="1" data-status="waitlisted">Waitlisted</button>';
+          } else {
+            action = '<button type="button" class="join-btn shrink-0 px-5 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[17px] font-semibold" data-id="' + run.id + '" data-joined="1">Joined</button>';
+          }
         } else if (locked) {
           action = '<span class="shrink-0 px-3 py-1 rounded-full bg-[#ffe4e2] dark:bg-[#3a1715] text-[#ff3b30] dark:text-[#ff6961] text-[15px] font-semibold">RSVP closed</span>';
         } else {
-          action = '<button type="button" class="join-btn shrink-0 px-6 py-2.5 rounded-full bg-[#c2410c] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0">Join</button>';
+          // A full run still joins: the tap waitlists rather than refuses.
+          // The cutoff lock wins over both, handled above.
+          action = '<button type="button" class="join-btn shrink-0 ' + (full ? 'px-5' : 'px-6') + ' py-2.5 rounded-full bg-[#c2410c] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0"' + (full ? ' data-full="1"' : '') + '>' + (full ? 'Join waitlist' : 'Join') + '</button>';
         }
       }
 
@@ -1018,6 +1031,9 @@
             '<h3 class="text-[19px] font-bold leading-tight truncate">' + esc(run.location) + '</h3>' +
             '<div class="mt-1.5 flex items-center gap-2">' + badgeHtml(info) +
               '<span class="run-time text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' + esc(fmtTime(when)) + '</span>' +
+              (run.series_id
+                ? '<span data-weekly="1" class="shrink-0 px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[14px] font-semibold">Weekly</span>'
+                : '') +
               (run.duration_minutes
                 ? '<span class="min-w-0 truncate text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' + esc(fmtDuration(run.duration_minutes)) + '</span>'
                 : '') +
@@ -1039,7 +1055,10 @@
         '</div>' +
         '<div class="mt-3.5 flex items-center justify-between gap-3">' +
           '<div class="flex items-center min-w-0">' + clusterHtml(run.preview) +
-            '<span class="ml-2 text-[17px] text-[#62626a] dark:text-[#b0b0b8] truncate">' + count + ' ' + (past ? 'went' : 'going') + '</span>' +
+            '<span class="ml-2 text-[17px] text-[#62626a] dark:text-[#b0b0b8] truncate">' +
+              (!past && run.capacity != null
+                ? count + ' of ' + run.capacity + ' going'
+                : count + ' ' + (past ? 'went' : 'going')) + '</span>' +
           '</div>' + action + kudos +
         '</div>' +
       '</div>';
@@ -1104,16 +1123,32 @@
       var whenText = info.label + ' · ' + fmtTime(when);
       var isPast = when.getTime() < Date.now();
       var count = run.attendee_count || 0;
+      // The roster splits into going and waitlisted; the server already
+      // orders attendees organizer-first then by join time, so the
+      // waitlist keeps its first-come order after the filter.
+      var waitlisted = (attendees || []).filter(function (a) { return a.status === 'waitlisted'; });
+      var waitlistPos = 0;
+      if (run.my_status === 'waitlisted' && tokenClaims && tokenClaims.id != null) {
+        waitlisted.some(function (a, i) {
+          if (a.user_id === tokenClaims.id) { waitlistPos = i + 1; return true; }
+          return false;
+        });
+      }
+      var isFull = run.capacity != null && count >= run.capacity;
 
       var action = '';
       if (!isPast && !run.is_organizer) {
         var locked = cutoffLocked(run);
         if (run.joined) {
-          action = '<button id="detail-action" type="button" data-action="leave" class="shrink-0 px-6 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[17px] font-semibold">Leave</button>';
+          if (run.my_status === 'waitlisted') {
+            action = '<button id="detail-action" type="button" data-action="leave" class="shrink-0 px-6 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[17px] font-semibold">Leave waitlist</button>';
+          } else {
+            action = '<button id="detail-action" type="button" data-action="leave" class="shrink-0 px-6 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[17px] font-semibold">Leave</button>';
+          }
         } else if (locked) {
           action = '<span id="rsvp-closed" class="shrink-0 px-3 py-1 rounded-full bg-[#ffe4e2] dark:bg-[#3a1715] text-[#ff3b30] dark:text-[#ff6961] text-[15px] font-semibold">RSVPs closed</span>';
         } else {
-          action = '<button id="detail-action" type="button" data-action="join" class="shrink-0 px-7 py-2.5 rounded-full bg-[#c2410c] text-white text-[17px] font-semibold">Join</button>';
+          action = '<button id="detail-action" type="button" data-action="join"' + (isFull ? ' data-full="1"' : '') + ' class="shrink-0 px-7 py-2.5 rounded-full bg-[#c2410c] text-white text-[17px] font-semibold">' + (isFull ? 'Join waitlist' : 'Join') + '</button>';
         }
       }
 
@@ -1179,6 +1214,7 @@
       var DIST_ICON = 'M4 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0M4 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0';
       var PACE = 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 12l4-3M12 7v1';
       var PEOPLE = 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6 6 0 0112 0M17.5 11.5a3 3 0 100-6M18 20a5.5 5.5 0 00-2-4.3';
+      var REPEAT_ICON = 'M21 12a9 9 0 11-2.64-6.36M21 3v6h-6';
 
       // The cutoff reads as a timestamp, so the sentence stays true no
       // matter how long the screen stays open.
@@ -1195,12 +1231,15 @@
       var facts = '<div data-type="' + (run.type_label ? '1' : '0') + '" data-duration="' + (run.duration_minutes ? '1' : '0') + '" data-cutoff-run="' + (run.rsvp_cutoff_hours ? '1' : '0') + '" data-distance="' + (run.distance_km ? '1' : '0') + '" data-pace-run="' + (run.pace_seconds_per_km ? '1' : '0') + '" class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
         infoRow(PIN, 'Where', run.location, false, true) +
         infoRow(CAL, 'When', whenText, true) +
+        (run.series_id ? infoRow(REPEAT_ICON, 'Repeats', 'Weekly', false) : '') +
         (run.duration_minutes ? infoRow(CLOCK, 'Duration', fmtDuration(run.duration_minutes), false) : '') +
         (cutoffText ? infoRow(CUTOFF, 'RSVP', cutoffText, false) : '') +
         (run.distance_km ? infoRow(DIST_ICON, 'Distance', fmtKm(run.distance_km), false) : '') +
         (run.pace_seconds_per_km ? infoRow(PACE, 'Pace', fmtPace(run.pace_seconds_per_km) + ' /km', false) : '') +
         (run.type_label ? infoRow(TAG, 'Type', run.type_label, false) : '') +
-        infoRow(PEOPLE, 'Confirmed', count + (count === 1 ? ' runner' : ' runners'), false) +
+        infoRow(PEOPLE, 'Confirmed', run.capacity != null
+          ? count + ' of ' + run.capacity + ' runners'
+          : count + (count === 1 ? ' runner' : ' runners'), false) +
       '</div>';
 
       // Kudos live on finished runs only: a full-width tap target below
@@ -1219,7 +1258,8 @@
         '</button>';
       }
 
-      var rows = (attendees || []).map(function (a) {
+      var goingRows = (attendees || []).filter(function (a) { return a.status !== 'waitlisted'; });
+      var rows = goingRows.map(function (a) {
         var badge = a.is_organizer
           ? '<span class="px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[14px] font-semibold">Organizer</span>'
           : '';
@@ -1230,6 +1270,26 @@
         '</div>';
       }).join('');
 
+      // The waitlist, only when someone is on it: same rows as the going
+      // list, with the queue position where the Organizer badge sits.
+      var waitlistHtml = '';
+      if (waitlisted.length) {
+        var waitRows = waitlisted.map(function (a, i) {
+          var pos = i + 1;
+          var suffix = pos === 1 ? 'st' : pos === 2 ? 'nd' : pos === 3 ? 'rd' : 'th';
+          return '<div class="flex items-center gap-3 px-4 py-3.5">' +
+            avatarHtml(a.username, 'lg') +
+            '<span class="min-w-0 flex-1 text-[19px] font-medium truncate">' + esc(a.username) + '</span>' +
+            '<span class="px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[14px] font-semibold">' + pos + suffix + '</span>' +
+          '</div>';
+        }).join('');
+        waitlistHtml = '<div id="waitlist">' +
+          '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">WAITLIST</h3>' +
+          '<p class="-mt-1 mb-2 px-1 text-[15px] leading-snug text-[#62626a] dark:text-[#b0b0b8]">First in line gets the next free spot.</p>' +
+          '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' + waitRows + '</div>' +
+        '</div>';
+      }
+
       var going = '<div>' +
         '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">CONFIRMED</h3>' +
         '<p class="-mt-1 mb-2 px-1 text-[15px] leading-snug text-[#62626a] dark:text-[#b0b0b8]">Everyone listed tapped Join. The organizer is always counted.</p>' +
@@ -1238,19 +1298,30 @@
           : '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] px-4 py-8 text-center text-[17px] text-[#62626a] dark:text-[#b0b0b8]">Nobody has confirmed yet.</div>') +
       '</div>';
 
+      var footnoteText;
+      if (isPast) {
+        footnoteText = 'This run has already happened.';
+      } else if (run.is_organizer) {
+        footnoteText = 'You are organizing this run. Cancel it from the menu if plans change.';
+      } else if (run.my_status === 'waitlisted') {
+        footnoteText = waitlistPos
+          ? 'You are number ' + waitlistPos + ' on the waitlist. You get a spot when someone leaves.'
+          : 'You are on the waitlist. You get a spot when someone leaves.';
+      } else if (run.joined) {
+        footnoteText = 'You are confirmed for this run. You can leave anytime.';
+      } else if (cutoffLocked(run)) {
+        footnoteText = 'RSVPs are closed. The organizer set a cutoff of ' + Number(run.rsvp_cutoff_hours) + (Number(run.rsvp_cutoff_hours) === 1 ? ' hour' : ' hours') + ' before the start.';
+      } else if (isFull) {
+        footnoteText = 'This run is full. Join the waitlist to get the next free spot.';
+      } else {
+        footnoteText = 'Tap Join to confirm you are going. You can leave anytime.';
+      }
+
       var footnote = '<p class="flex items-start gap-2 px-1 pb-2 text-[15px] leading-snug text-[#62626a] dark:text-[#b0b0b8]">' +
         '<svg class="mt-0.5 shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.1"/></svg>' +
-        (isPast
-          ? 'This run has already happened.'
-          : run.is_organizer
-            ? 'You are organizing this run. Cancel it from the menu if plans change.'
-            : run.joined
-              ? 'You are confirmed for this run. You can leave anytime.'
-              : cutoffLocked(run)
-                ? 'RSVPs are closed. The organizer set a cutoff of ' + Number(run.rsvp_cutoff_hours) + (Number(run.rsvp_cutoff_hours) === 1 ? ' hour' : ' hours') + ' before the start.'
-                : 'Tap Join to confirm you are going. You can leave anytime.') + '</p>';
+        footnoteText + '</p>';
 
-      return banner + summary + facts + meeting + (isPast ? kudosCard : '') + going + footnote;
+      return banner + summary + facts + meeting + (isPast ? kudosCard : '') + going + waitlistHtml + footnote;
     }
 
     function renderDetail() {
@@ -1420,6 +1491,8 @@
       });
     }
 
+    var sheetRepeatRefresh = null; // set by the New Run sheet, see wireSheet
+
     function render() {
       renderTimeFormat();
       renderTabs();
@@ -1427,6 +1500,9 @@
       renderPaceFilter();
       renderList();
       renderDetail();
+      // The open sheet's repeat hint carries a clock time, so it follows
+      // the format switch and any locale adoption.
+      if (sheetRepeatRefresh) sheetRepeatRefresh();
     }
 
     /* -- Time format menu (run details) ---------------------------- */
@@ -1718,6 +1794,17 @@
             '<span class="' + LABEL + '">When</span>' +
             '<input id="f-when" type="datetime-local" required aria-label="Date and time" class="' + FIELD + ' text-right">' +
           '</div>' +
+          '<div id="repeat-row" class="' + ROW + ' flex-col items-stretch gap-2.5" role="group" aria-label="Repeats">' +
+            '<span class="flex items-center gap-3">' +
+              '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.64-6.36M21 3v6h-6"/></svg>' +
+              '<span class="' + LABEL + '">Repeats</span>' +
+            '</span>' +
+            '<span class="flex items-center gap-1.5 pl-[34px] flex-wrap">' +
+              '<button type="button" data-repeat="once" aria-pressed="true" class="' + REPEAT_ON + '">Once</button>' +
+              '<button type="button" data-repeat="weekly" aria-pressed="false" class="' + REPEAT_OFF + '">Weekly</button>' +
+            '</span>' +
+            '<span id="repeat-hint" class="hidden pl-[34px] text-[14px] text-[#6b6b73] dark:text-[#b0b0b8]"></span>' +
+          '</div>' +
           '<label id="meeting-row" data-map="0" class="' + ROW + ' flex-col items-stretch gap-2">' +
             '<span class="flex items-center gap-3">' +
               '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
@@ -1769,6 +1856,14 @@
             '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2M12 3v1M12 20v1M4.9 4.9l.7.7M18.4 18.4l.7.7"/></svg>' +
             '<span class="' + LABEL + '">RSVP closes</span>' +
             '<input id="f-cutoff" type="number" min="1" max="72" step="1" inputmode="numeric" autocomplete="off" placeholder="Optional: 2h before" class="' + FIELD + ' text-right">' +
+          '</label>' +
+          '<label id="capacity-row" class="' + ROW + '">' +
+            '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6 6 0 0112 0M17.5 11.5a3 3 0 100-6M18 20a5.5 5.5 0 00-2-4.3"/></svg>' +
+            '<span class="' + LABEL + '">Capacity</span>' +
+            '<span class="flex-1 min-w-0 flex items-center gap-2">' +
+              '<input id="f-capacity" type="number" min="2" max="200" step="1" inputmode="numeric" autocomplete="off" placeholder="Optional: 12" class="' + FIELD + ' text-right">' +
+              '<span class="' + UNIT + '" data-unit="runners">runners</span>' +
+            '</span>' +
           '</label>' +
           '<button id="type-row" type="button" aria-label="Type" class="' + ROW + ' w-full text-left">' +
             '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01"/></svg>' +
@@ -1863,6 +1958,9 @@
       var planValueEl = contentEl.querySelector('#plan-value');
       var planHintEl = contentEl.querySelector('#plan-hint');
       var planChips = Array.prototype.slice.call(contentEl.querySelectorAll('.plan-chip'));
+      var capacityInput = contentEl.querySelector('#f-capacity');
+      var repeatHintEl = contentEl.querySelector('#repeat-hint');
+      var repeatChips = Array.prototype.slice.call(contentEl.querySelectorAll('[data-repeat]'));
       var post = contentEl.querySelector('#post-run-btn');
       var typeRow = contentEl.querySelector('#type-row');
       var typeValueEl = contentEl.querySelector('#type-value');
@@ -1870,6 +1968,10 @@
       var meetingPin = null; // { lat, lng } once the geocoder has answered
       var meetingSeq = 0;
       var meetingTimer = null;
+      var weeklyRepeat = false;
+      // setFormat and a locale change re-render everything; the repeat
+      // hint's clock time must follow, so render() reaches in here.
+      sheetRepeatRefresh = renderRepeatHint;
 
       // The preset picker: choosing a plan fills the distance field and
       // shows that plan's weekly mileage as a hint. Tapping the active
@@ -1922,6 +2024,41 @@
       // A hand-edited distance stays whatever the runner typed: the field
       // is the source of truth, the preset only ever writes into it.
       distance.addEventListener('input', clearPlan);
+
+      // The Repeats row: Once (the default) or Weekly. Weekly shows the
+      // weekday and time the series will repeat at, kept in step with the
+      // When row and the clock-format switch.
+      function renderRepeatHint() {
+        if (!weeklyRepeat || !repeatHintEl) {
+          if (repeatHintEl) repeatHintEl.classList.add('hidden');
+          return;
+        }
+        var d = parseWhen(when.value);
+        if (!d) { repeatHintEl.classList.add('hidden'); return; }
+        var dayName = '';
+        try { dayName = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(d); }
+        catch (err) { dayName = ''; }
+        repeatHintEl.innerHTML = 'Every ' + (dayName ? esc(dayName) + ' ' : '') + 'week at ' +
+          '<span class="run-time">' + esc(fmtTime(d)) + '</span>';
+        repeatHintEl.classList.remove('hidden');
+      }
+
+      function setRepeat(value) {
+        weeklyRepeat = value === 'weekly';
+        repeatChips.forEach(function (btn) {
+          var on = btn.getAttribute('data-repeat') === (weeklyRepeat ? 'weekly' : 'once');
+          btn.className = on ? REPEAT_ON : REPEAT_OFF;
+          btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        renderRepeatHint();
+      }
+
+      repeatChips.forEach(function (btn) {
+        btn.addEventListener('click', function () { setRepeat(btn.getAttribute('data-repeat')); });
+      });
+      when.addEventListener('input', renderRepeatHint);
+      when.addEventListener('change', renderRepeatHint);
+      setRepeat('once');
 
       // Every state change lands here: what the hint says, whether the
       // thumbnail shows, and what data-map advertises to the checks.
@@ -2186,6 +2323,13 @@
         if (pace.value.trim() !== '') {
           paceStr = pace.value.trim();
         }
+        // Optional capacity and the weekly choice: blank/Once mean "not
+        // set", anything else goes to the server as-is and the server
+        // owns validation, so the toast carries its message.
+        var capacityVal = capacityInput.value.trim();
+        var deviceTz;
+        try { deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone; }
+        catch (err) { deviceTz = ''; }
         post.disabled = true;
         post.textContent = 'Posting...';
         api('/api/runs', {
@@ -2200,6 +2344,9 @@
             meeting_lng: meetingPin ? meetingPin.lng : undefined,
             duration_minutes: durationMinutes === null ? undefined : durationMinutes,
             rsvp_cutoff_hours: cutoff.value.trim() === '' ? undefined : cutoff.value.trim(),
+            capacity: capacityVal === '' ? undefined : capacityVal,
+            repeats: weeklyRepeat ? 'weekly' : undefined,
+            timezone: weeklyRepeat && deviceTz ? deviceTz : undefined,
             distance_km: distanceKm === null ? undefined : distanceKm,
             pace: paceStr === null ? undefined : paceStr,
             photo_url: photo ? photo.url : undefined,
@@ -2300,7 +2447,13 @@
         if (join.dataset.joined === '1') return;
         join.disabled = true;
         joinRun(parseInt(join.dataset.id, 10))
-          .then(function () { return loadRuns(); })
+          .then(function (res) {
+            return loadRuns().then(function () {
+              // The board has no success toast on a plain join; the
+              // waitlist is new information, so it gets one.
+              if (res && res.status === 'waitlisted') notify('You are on the waitlist.');
+            });
+          })
           .catch(function (err) { join.disabled = false; notify(err.message); });
         return;
       }
@@ -2332,10 +2485,15 @@
       if (!btn || !state.detail) return;
       var id = state.detail.run.id;
       var leaving = btn.dataset.action === 'leave';
+      var wasWaitlisted = state.detail.run.my_status === 'waitlisted';
       btn.disabled = true;
       (leaving ? leaveRun(id) : joinRun(id))
-        .then(function () { return refreshBoth(id); })
-        .then(function () { notify(leaving ? 'You left this run.' : 'You are going.'); })
+        .then(function (res) { return refreshBoth(id).then(function () { return res; }); })
+        .then(function (res) {
+          notify(leaving
+            ? (wasWaitlisted ? 'You left the waitlist.' : 'You left this run.')
+            : (res && res.status === 'waitlisted' ? 'You are on the waitlist.' : 'You are going.'));
+        })
         .catch(function (err) {
           if (isCutoffError(err)) {
             // The window moved on while the screen was open. Re-render
@@ -2354,14 +2512,16 @@
       if (!state.detail) return;
       var run = state.detail.run;
       var isPast = new Date(run.starts_at).getTime() < Date.now();
+      var wasWaitlisted = run.my_status === 'waitlisted';
       var items = [];
       // Share first: it is relevant to every viewer, while the entries
       // below it only exist in some states.
       items.push({ label: 'Share run', value: 'share' });
       // Reminder toggle: only for attendees of a run that has not
       // started, so the menu stays exactly as short as it is today for
-      // everyone else. The label is the action the tap performs.
-      if (!isPast && run.joined) {
+      // everyone else. A waitlisted member gets no reminder until they
+      // have a spot, so the choice is hidden from them.
+      if (!isPast && run.joined && !wasWaitlisted) {
         items.push({
           label: run.reminders_off ? 'Turn reminders on' : 'Turn reminders off',
           value: 'reminders',
@@ -2369,8 +2529,17 @@
       }
       if (!isPast && run.is_organizer) {
         items.push({ label: 'Cancel run', destructive: true, value: 'cancel', icon: 'trash' });
+        // Only a weekly run can be stopped; Cancel run still lifts just
+        // this week.
+        if (run.series_id) {
+          items.push({ label: 'Stop weekly run', destructive: true, value: 'endseries' });
+        }
       } else if (!isPast && run.joined) {
-        items.push({ label: 'Leave run', destructive: true, value: 'leave' });
+        items.push({
+          label: wasWaitlisted ? 'Leave waitlist' : 'Leave run',
+          destructive: true,
+          value: 'leave',
+        });
       }
       // The detail screen shows a time but has no room for the segmented
       // control, so the same choice lives here, one level down.
@@ -2410,7 +2579,26 @@
           if (choice.value === 'leave') {
             return leaveRun(run.id)
               .then(function () { return refreshBoth(run.id); })
-              .then(function () { notify('You left this run.'); });
+              .then(function () { notify(wasWaitlisted ? 'You left the waitlist.' : 'You left this run.'); });
+          }
+          if (choice.value === 'endseries') {
+            return unNative.alert({
+              title: 'Stop this weekly run?',
+              message: 'This week and every week after it will be cancelled. Past weeks stay.',
+              buttons: [
+                { label: 'Keep it', style: 'cancel' },
+                { label: 'Stop weekly run', style: 'destructive' },
+              ],
+            }).then(function (res) {
+              if (!res || !res.button || res.button.style !== 'destructive') return;
+              return api('/api/runs/' + run.id + '?series=end', { method: 'DELETE' })
+                .then(function () {
+                  state.detail = null;
+                  setHash('');
+                  return loadRuns();
+                })
+                .then(function () { notify('Weekly run stopped.'); });
+            });
           }
           return unNative.alert({
             title: 'Cancel this run?',
@@ -2423,8 +2611,10 @@
             if (!res || !res.button || res.button.style !== 'destructive') return;
             // Best-effort: an orphaned upload just sits against the app's
             // quota, which is a smaller problem than a cancel that fails
-            // because the storage call did.
-            var cleanup = (run.photo_file_id && window.usernode && usernode.deleteFile)
+            // because the storage call did. A weekly run's photo is
+            // shared by every week, so cancelling one week or stopping
+            // the series keeps the file.
+            var cleanup = (!run.series_id && run.photo_file_id && window.usernode && usernode.deleteFile)
               ? usernode.deleteFile(run.photo_file_id).catch(function () {})
               : Promise.resolve();
             return cleanup
