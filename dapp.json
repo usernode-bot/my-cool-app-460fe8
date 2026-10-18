@@ -38,9 +38,9 @@
       "expectText": "Join"
     },
     {
-      "name": "Join uses the track orange accent",
+      "name": "Join uses the blue accent",
       "path": "/#run/900004",
-      "expectSelector": "#detail-action[data-action='join'].bg-\\[\\#c2410c\\]"
+      "expectSelector": "#detail-action[data-action='join'].bg-\\[\\#0a68e0\\]"
     },
     {
       "name": "Home header shows the running tagline",
