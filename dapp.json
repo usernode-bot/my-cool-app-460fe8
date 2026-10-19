@@ -38,9 +38,9 @@
       "expectText": "Join"
     },
     {
-      "name": "Join uses the track orange accent",
+      "name": "Join uses the blue accent",
       "path": "/#run/900004",
-      "expectSelector": "#detail-action[data-action='join'].bg-\\[\\#c2410c\\]"
+      "expectSelector": "#detail-action[data-action='join'].bg-\\[\\#0a68e0\\]"
     },
     {
       "name": "Home header shows the running tagline",
@@ -425,6 +425,45 @@
       "path": "/#run/900001",
       "expectSelector": "#detail-body [data-pace-run='1']",
       "expectText": "6:30 /km"
+    },
+    {
+      "name": "New Run sheet shows the Repeats row",
+      "path": "/#new",
+      "expectSelector": "#repeat-row [data-repeat='weekly']"
+    },
+    {
+      "name": "New Run sheet shows the Capacity row",
+      "path": "/#new",
+      "expectSelector": "#capacity-row .un-unit[data-unit='runners']"
+    },
+    {
+      "name": "Weekly run shows its chip on the board",
+      "path": "/",
+      "expectSelector": ".run-card [data-weekly='1']",
+      "expectText": "Weekly track session"
+    },
+    {
+      "name": "Full run offers the waitlist on the board",
+      "path": "/",
+      "expectSelector": ".run-card .join-btn[data-full='1']",
+      "expectText": "Join waitlist"
+    },
+    {
+      "name": "Full run detail offers the waitlist",
+      "path": "/#run/900006",
+      "expectSelector": "#detail-action[data-action='join'][data-full='1']",
+      "expectText": "Join waitlist"
+    },
+    {
+      "name": "Run detail lists the waitlist",
+      "path": "/#run/900006",
+      "expectSelector": "#waitlist",
+      "expectText": "staging-demo-omar"
+    },
+    {
+      "name": "Run detail shows the Repeats row",
+      "path": "/#run/900006",
+      "expectText": "Repeats"
     }
   ],
   "visibility": {
