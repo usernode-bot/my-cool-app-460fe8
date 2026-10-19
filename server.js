@@ -1270,6 +1270,20 @@ const SEED_RUNS = [
     organizer: [-901, 'staging-demo-maya'],
     joiners: [],
   },
+  {
+    id: 900007,
+    location: 'Staging demo: Calendar export run',
+    note: 'fixed date, for the calendar export checks',
+    type: null,
+    // A fixed wall-clock start on purpose: the .ics export checks assert
+    // the exact DTSTART and the date inside the file name, which a
+    // boot-relative start could never pin. Kept well in the future; bump
+    // the date if it ever slips behind "today".
+    fixedStartsAt: '2027-03-14T12:00:00.000Z',
+    distance: 5,
+    organizer: [-901, 'staging-demo-maya'],
+    joiners: [],
+  },
 ];
 
 // Times are recomputed on every boot so the demo rows keep saying Today /
@@ -1306,7 +1320,8 @@ async function seedStaging() {
         run.id,
         run.location,
         run.note,
-        run.inHours != null ? seedStartsIn(run.inHours) : seedStartsAt(run.dayOffset, run.hour, run.minute),
+        run.fixedStartsAt ||
+          (run.inHours != null ? seedStartsIn(run.inHours) : seedStartsAt(run.dayOffset, run.hour, run.minute)),
         run.organizer[0],
         run.organizer[1],
         run.photoUrl || null,

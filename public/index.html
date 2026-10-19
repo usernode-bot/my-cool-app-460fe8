@@ -509,6 +509,7 @@
       detail: null,      // { run, attendees }
       screen: 'home',
       sheet: null,
+      calSheet: null,    // the Add to calendar duration sheet, { handle, overlay }
       me: null,          // resolved from the first API response we own
       timeFormat: 'auto', // mode: 'auto' (follow the locale), '12' or '24'; resolved at boot below
       dist: [],          // active distance chips, e.g. ['5k']; empty shows everything
@@ -1027,6 +1028,16 @@
         }
       }
 
+      // A small calendar icon beside the action, on upcoming runs only:
+      // one tap opens the export sheet without leaving the board.
+      var calIcon = '';
+      if (!past) {
+        calIcon =
+          '<button type="button" class="cal-card-btn un-touch-target shrink-0 w-9 h-9 rounded-full bg-white dark:bg-[#1c1c20] border border-[#ececf0] dark:border-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] flex items-center justify-center" data-cal-icon="1" data-id="' + run.id + '" aria-label="Add to calendar">' +
+          '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4"/></svg>' +
+          '</button>';
+      }
+
       return '<div class="run-card un-pressable bg-white dark:bg-[#1c1c20] rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.08)]" role="button" tabindex="0" data-id="' + run.id + '">' +
         '<div class="flex gap-3">' + mediaHtml(run) +
           '<div class="min-w-0 flex-1">' +
@@ -1063,7 +1074,8 @@
               (!past && run.capacity != null
                 ? count + ' of ' + run.capacity + ' going'
                 : count + ' ' + (past ? 'went' : 'going')) + '</span>' +
-          '</div>' + action + kudos +
+          '</div>' +
+          '<div class="flex items-center gap-2 shrink-0">' + calIcon + action + kudos + '</div>' +
         '</div>' +
       '</div>';
     }
@@ -1256,6 +1268,19 @@
       var PEOPLE = 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6 6 0 0112 0M17.5 11.5a3 3 0 100-6M18 20a5.5 5.5 0 00-2-4.3';
       var REPEAT_ICON = 'M21 12a9 9 0 11-2.64-6.36M21 3v6h-6';
 
+      // Add to calendar: a full-width neutral action between the summary
+      // and the facts, on upcoming runs only. A finished run has nothing
+      // left to put in a calendar, so it keeps just its Kudos card.
+      var calCard = '';
+      if (!isPast) {
+        calCard =
+          '<button id="cal-detail-btn" type="button" aria-label="Add to calendar" class="w-full flex items-center gap-3 px-4 py-4 rounded-2xl ' +
+          'bg-white dark:bg-[#1c1c20] border border-[#ececf0] dark:border-[#2c2c31] text-[19px] font-medium">' +
+          '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="' + CAL + '"/></svg>' +
+          '<span>Add to calendar</span>' +
+          '</button>';
+      }
+
       // The cutoff reads as a timestamp, so the sentence stays true no
       // matter how long the screen stays open.
       var cutoffDeadlineDate = cutoffDeadline(run);
@@ -1361,7 +1386,7 @@
         '<svg class="mt-0.5 shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.1"/></svg>' +
         footnoteText + '</p>';
 
-      return banner + summary + facts + meeting + (isPast ? kudosCard : '') + going + waitlistHtml + footnote;
+      return banner + summary + calCard + facts + meeting + (isPast ? kudosCard : '') + going + waitlistHtml + footnote;
     }
 
     function renderDetail() {
@@ -2409,6 +2434,238 @@
       where.focus({ preventScroll: true });
     }
 
+    /* ── Add to calendar (.ics export) ─────────────────────────────── */
+
+    // The export is client-side only: a standards-compliant VCALENDAR
+    // built from the run the screen already holds, saved with a Blob
+    // download. The sheet asks how long the event should block (30, 60
+    // or 90 minutes, 60 picked for you) before anything is written, and
+    // Cancel closes it without saving a file.
+
+    var CAL_DURATIONS = [30, 60, 90];
+
+    // Whole-literal chip states, same rule as the day and time picks: the
+    // picked duration lifts as a raised neutral surface, never a blue tint.
+    var CAL_CHIP_BASE = 'shrink-0 px-3.5 py-2 rounded-full text-[15px] font-semibold ';
+    var CAL_CHIP_ON = CAL_CHIP_BASE + 'bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
+    var CAL_CHIP_OFF = CAL_CHIP_BASE + 'bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]';
+
+    // RFC 5545 TEXT escaping: backslash first, then ; , and newlines.
+    function icsEscape(value) {
+      return String(value == null ? '' : value)
+        .replace(/\\/g, '\\\\')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,')
+        .replace(/\r?\n/g, '\\n');
+    }
+
+    function icsStamp(d) {
+      return d.getUTCFullYear() + pad2(d.getUTCMonth() + 1) + pad2(d.getUTCDate()) +
+        'T' + pad2(d.getUTCHours()) + pad2(d.getUTCMinutes()) + pad2(d.getUTCSeconds()) + 'Z';
+    }
+
+    // The run's own day as the viewer sees it, for the file name. Local
+    // date parts, never UTC ones: the run happens on the day the member
+    // would circle on their own calendar.
+    function calDateStr(run) {
+      var d = new Date(run.starts_at);
+      return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+    }
+
+    function icsFilename(run) {
+      return 'run-' + calDateStr(run) + '.ics';
+    }
+
+    // RFC 5545 folding: no content line may exceed 75 octets, so long
+    // lines continue with a single leading space, which parsers strip on
+    // read. Export lines here are ASCII-heavy, so folding by character
+    // keeps every line within the limit in practice.
+    function icsFold(line) {
+      if (line.length <= 75) return line;
+      var out = line.slice(0, 75);
+      var rest = line.slice(75);
+      while (rest.length) {
+        out += '\r\n ' + rest.slice(0, 74);
+        rest = rest.slice(74);
+      }
+      return out;
+    }
+
+    // The same tokenless deep link the share sheet builds: origin +
+    // pathname drops ?token=, and the server lands a visitor on #run/<id>.
+    function runLink(run) {
+      return location.origin + location.pathname + '#run/' + run.id;
+    }
+
+    function buildIcs(run, minutes) {
+      var start = new Date(run.starts_at);
+      var end = new Date(start.getTime() + minutes * 60000);
+      var stamp = new Date();
+      var desc = [];
+      if (run.note) desc.push(icsEscape(run.note));
+      if (run.meeting_point) desc.push('Meeting point: ' + icsEscape(run.meeting_point));
+      desc.push('Details: ' + runLink(run));
+      var lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Run Club//Run export 1.0//EN',
+        'CALSCALE:GREGORIAN',
+        'BEGIN:VEVENT',
+        'UID:run-' + run.id + '-' + stamp.getTime() + '@run-club',
+        'DTSTAMP:' + icsStamp(stamp),
+        'DTSTART:' + icsStamp(start),
+        'DTEND:' + icsStamp(end),
+        'SUMMARY:' + icsEscape(run.location),
+        'LOCATION:' + icsEscape(run.meeting_point
+          ? run.location + ', ' + run.meeting_point
+          : run.location),
+        'DESCRIPTION:' + desc.join('\\n'),
+        'URL:' + runLink(run),
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ];
+      return lines.map(icsFold).join('\r\n') + '\r\n';
+    }
+
+    function downloadIcs(run, minutes) {
+      var blob = new Blob([buildIcs(run, minutes)], { type: 'text/calendar;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = icsFilename(run);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Give the browser a beat to start the download before releasing
+      // the blob; revoking too early can cancel it on some WebViews.
+      setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+    }
+
+    // ?cal=ics renders the file the download would produce, in place,
+    // without saving anything: the automated checks (and a curious
+    // reviewer) can read the DTSTART, LOCATION, SUMMARY and URL lines and
+    // the file name without a real download firing. ?dur= picks the
+    // duration, 60 by default. Same single-load rules as ?tf= and ?plan=:
+    // pure view state, nothing persisted, nothing written.
+    function renderCalFile(run, minutes) {
+      var name = icsFilename(run);
+      var dateStr = calDateStr(run);
+      var old = document.getElementById('cal-file');
+      if (old) old.remove();
+      var wrap = document.createElement('div');
+      wrap.id = 'cal-file';
+      wrap.className = 'bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] p-4';
+      wrap.setAttribute('data-cal-file', '1');
+      wrap.setAttribute('data-filename', name);
+      wrap.setAttribute('data-run-date', dateStr);
+      wrap.setAttribute('data-cal-dur', String(minutes));
+      wrap.innerHTML =
+        '<h3 class="text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">CALENDAR FILE</h3>' +
+        '<p class="mt-1 text-[15px] leading-snug text-[#62626a] dark:text-[#b0b0b8]">File name: ' + esc(name) +
+          ' · Run date: ' + esc(dateStr) + ' · ' + minutes + ' min</p>' +
+        '<pre class="mt-3 overflow-x-auto text-[12px] leading-snug text-[#111114] dark:text-[#f2f2f7] whitespace-pre-wrap break-all">' + esc(buildIcs(run, minutes)) + '</pre>';
+      detailBodyEl.appendChild(wrap);
+    }
+
+    function buildCalSheet(run) {
+      var wrap = document.createElement('div');
+      wrap.id = 'cal-sheet';
+      wrap.className = 'pb-1';
+      wrap.setAttribute('data-cal-open', '1');
+      var when = new Date(run.starts_at);
+      var chips = CAL_DURATIONS.map(function (m) {
+        var on = m === 60;
+        return '<button type="button" data-cal-dur="' + m + '" aria-pressed="' + (on ? 'true' : 'false') +
+          '" class="' + (on ? CAL_CHIP_ON : CAL_CHIP_OFF) + '">' + m + ' min</button>';
+      }).join('');
+      wrap.innerHTML =
+        '<div class="flex items-center justify-between gap-3">' +
+          '<h2 class="text-[30px] font-extrabold tracking-tight">Add to calendar</h2>' +
+          '<button id="cal-sheet-close" type="button" aria-label="Close" class="un-touch-target shrink-0 w-9 h-9 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] flex items-center justify-center">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
+          '</button>' +
+        '</div>' +
+        '<p class="mt-2 text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' + esc(run.location) +
+          ' · <span class="run-time">' + esc(fmtTime(when)) + '</span></p>' +
+        '<p class="mt-5 text-[15px] font-medium text-[#62626a] dark:text-[#b0b0b8]">Event length</p>' +
+        '<div class="mt-2 flex items-center gap-1.5" role="group" aria-label="Event duration">' + chips + '</div>' +
+        '<button id="cal-download-btn" type="button" class="mt-5 w-full h-[58px] rounded-2xl bg-[#0a68e0] text-white text-[19px] font-semibold">Download calendar file</button>' +
+        '<button id="cal-cancel-btn" type="button" class="mt-2 w-full h-[52px] rounded-2xl text-[19px] font-semibold text-[#62626a] dark:text-[#b0b0b8]">Cancel</button>';
+      return wrap;
+    }
+
+    function openCalSheet(run) {
+      if (state.calSheet) return;
+      var dur = 60;
+      var contentEl = buildCalSheet(run);
+      var handle = null;
+      var overlay = null;
+
+      function setDur(next) {
+        dur = next;
+        contentEl.querySelectorAll('[data-cal-dur]').forEach(function (btn) {
+          var on = Number(btn.getAttribute('data-cal-dur')) === dur;
+          btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+          btn.className = on ? CAL_CHIP_ON : CAL_CHIP_OFF;
+        });
+      }
+      contentEl.querySelectorAll('[data-cal-dur]').forEach(function (btn) {
+        btn.addEventListener('click', function () { setDur(Number(btn.getAttribute('data-cal-dur'))); });
+      });
+      contentEl.querySelector('#cal-download-btn').addEventListener('click', function () {
+        downloadIcs(run, dur);
+        closeCalSheet();
+        notify('Calendar file downloaded.');
+      });
+      contentEl.querySelector('#cal-cancel-btn').addEventListener('click', cancelCalSheet);
+      contentEl.querySelector('#cal-sheet-close').addEventListener('click', cancelCalSheet);
+
+      if (window.unNative && unNative.presentSheet) {
+        handle = unNative.presentSheet({
+          contentEl: contentEl,
+          onDismiss: function () { state.calSheet = null; },
+        });
+      } else {
+        // No hosted kit (local dev without the platform shell): mount the
+        // same content as a simple bottom panel so the export still works.
+        overlay = document.createElement('div');
+        overlay.className = 'fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-4';
+        overlay.appendChild(contentEl);
+        document.getElementById('app').appendChild(overlay);
+      }
+      state.calSheet = { handle: handle, overlay: overlay };
+    }
+
+    function closeCalSheet() {
+      var s = state.calSheet;
+      if (!s) return;
+      if (s.handle) s.handle.dismiss(); // onDismiss clears the state
+      else if (s.overlay) { s.overlay.remove(); state.calSheet = null; }
+    }
+
+    // Cancel: close the sheet and stop there. Nothing is downloaded. The
+    // marker on #app records the outcome so a check can assert it.
+    function cancelCalSheet() {
+      closeCalSheet();
+      document.getElementById('app').setAttribute('data-cal-cancelled', '1');
+    }
+
+    // ?cal= deep links, the same single-load view-state hooks as ?tf= and
+    // ?plan=: 'sheet' opens the duration sheet on the hashed run, 'cancel'
+    // opens it and then runs the very handler the sheet's Cancel button
+    // uses, and 'ics' renders the file the download would produce.
+    function applyCalMode(run) {
+      var mode = params.get('cal');
+      if (mode === 'sheet') { openCalSheet(run); return; }
+      if (mode === 'cancel') {
+        openCalSheet(run);
+        // One beat so the sheet is up before the cancel handler closes it.
+        setTimeout(cancelCalSheet, 120);
+        return;
+      }
+      if (mode === 'ics') renderCalFile(run, Math.max(1, Number(params.get('dur')) || 60));
+    }
+
     /* ── Actions ───────────────────────────────────────────────────── */
 
     // The shared message is the detail screen's own summary plus a tokenless
@@ -2501,6 +2758,17 @@
           .catch(function (err) { join.disabled = false; notify(err.message); });
         return;
       }
+      var calCardBtn = e.target.closest('.cal-card-btn');
+      if (calCardBtn) {
+        // Same rule as join and kudos: the card underneath is itself a
+        // button, so stop the tap before it also navigates.
+        e.stopPropagation();
+        var calRun = state.runs.find(function (r) {
+          return r.id === parseInt(calCardBtn.dataset.id, 10);
+        });
+        if (calRun) openCalSheet(calRun);
+        return;
+      }
       var card = e.target.closest('.run-card');
       if (card) setHash('run/' + card.dataset.id);
     });
@@ -2512,6 +2780,10 @@
     });
 
     detailBodyEl.addEventListener('click', function (e) {
+      if (e.target.closest('#cal-detail-btn') && state.detail) {
+        openCalSheet(state.detail.run);
+        return;
+      }
       var kudosBtn = e.target.closest('#kudos-btn');
       if (kudosBtn && state.detail) {
         kudosBtn.disabled = true;
@@ -2752,6 +3024,10 @@
 
     function route() {
       if (suppressHash) return;
+      // Leaving a screen closes the export sheet, the same way the New
+      // Run sheet is dismissed below; applyCalMode opens it afresh after
+      // the detail load, so this never fights the deep links.
+      if (state.calSheet) closeCalSheet();
       var h = (location.hash || '').replace(/^#/, '');
       var run = h.match(/^run\/(\d+)$/);
 
@@ -2762,6 +3038,7 @@
         loadDetail(id).then(function () {
           renderDetail();
           showScreen('detail', already ? 'none' : 'push');
+          applyCalMode(state.detail.run);
         }).catch(function (err) {
           notify(err.message);
           setHash('');

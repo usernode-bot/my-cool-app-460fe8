@@ -464,6 +464,77 @@
       "name": "Run detail shows the Repeats row",
       "path": "/#run/900006",
       "expectText": "Repeats"
+    },
+    {
+      "name": "Run detail shows the Add to calendar button",
+      "path": "/#run/900001",
+      "expectSelector": "#cal-detail-btn"
+    },
+    {
+      "name": "Run cards show the calendar icon",
+      "path": "/",
+      "expectSelector": ".run-card [data-cal-icon='1']"
+    },
+    {
+      "name": "Calendar sheet offers 30, 60 and 90 minute durations",
+      "path": "/?cal=sheet#run/900007",
+      "expectSelector": "#cal-sheet[data-cal-open='1']",
+      "expectText": "30 min"
+    },
+    {
+      "name": "Calendar sheet defaults to 60 minutes",
+      "path": "/?cal=sheet#run/900007",
+      "expectSelector": "#cal-sheet [data-cal-dur='60'][aria-pressed='true']",
+      "expectText": "90 min"
+    },
+    {
+      "name": "Choosing a duration produces the calendar file",
+      "path": "/?cal=ics&dur=30#run/900007",
+      "expectSelector": "#cal-file[data-cal-file='1'][data-filename$='.ics']",
+      "expectText": "DTEND:20270314T123000Z"
+    },
+    {
+      "name": "The calendar file has the run start time",
+      "path": "/?cal=ics#run/900007",
+      "expectText": "DTSTART:20270314T120000Z"
+    },
+    {
+      "name": "The calendar file has the run location",
+      "path": "/?cal=ics#run/900007",
+      "expectText": "LOCATION:Staging demo: Calendar export run"
+    },
+    {
+      "name": "The calendar file names the run",
+      "path": "/?cal=ics#run/900007",
+      "expectText": "SUMMARY:Staging demo: Calendar export run"
+    },
+    {
+      "name": "The calendar file links back to the run",
+      "path": "/?cal=ics#run/900007",
+      "expectText": "URL:"
+    },
+    {
+      "name": "The calendar file name includes the run date",
+      "path": "/?cal=ics#run/900007",
+      "expectSelector": "#cal-file[data-filename='run-2027-03-14.ics']",
+      "expectText": "Run date: 2027-03-14"
+    },
+    {
+      "name": "Cancel closes the calendar sheet without downloading",
+      "path": "/?cal=cancel#run/900007",
+      "expectSelector": "#app[data-cal-cancelled='1']"
+    },
+    {
+      "id": "calendar.export",
+      "name": "Add to calendar sheet offers durations on run details",
+      "path": "/?cal=sheet#run/900007",
+      "expectSelector": "#cal-sheet [data-cal-dur='60'][aria-pressed='true']",
+      "visual": true,
+      "impact": [
+        "public/index.html",
+        "styles/**",
+        "tailwind.config.js"
+      ]
     }
   ],
   "visibility": {
