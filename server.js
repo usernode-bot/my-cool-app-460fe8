@@ -189,9 +189,18 @@ const MAX_PHOTO_FILE_ID = 64;
 // Generous for club runs; the cap keeps the field honest, not a rule
 // about how far people may run.
 const MAX_DURATION_MINUTES = 600;
+// Optional RSVP cutoff in whole hours before the start, 1..72. Blank (or
+// NULL in the database) keeps the current behaviour: people can join until
+// the run starts.
+const MAX_CUTOFF_HOURS = 72;
 // Planned distance range in kilometres, enforced in POST /api/runs.
 // Optional: a run without one simply never matches a distance chip.
 const MAX_DISTANCE_KM = 200;
+// Planned pace range, entered as "m:ss" per kilometre and stored as whole
+// seconds so the pace chips can compare it numerically. Optional: a run
+// without one simply never matches a pace chip either.
+const MIN_PACE_SECONDS = 3 * 60;
+const MAX_PACE_SECONDS = 12 * 60;
 // Preset run types. Keep in sync with PRESET_TYPES in public/index.html:
 // the server is authoritative for validation, the frontend list drives the
 // picker, and a label is only valid if BOTH sides know it.
@@ -211,21 +220,30 @@ const FUTURE_SLACK_MS = 60 * 1000;
 // everywhere a reminder row is written.
 const REMINDER_LEAD = "interval '1 hour'";
 
-// One row per run, with the three derived fields every list/detail view
-// needs: how many are going, whether the caller is one of them, and the
-// first few names for the avatar cluster.
+// One row per run, with the derived fields every list/detail view needs:
+// how many are going (waitlisted rows never count), whether the caller is
+// on the list and in which role, and the first few going names for the
+// avatar cluster. `joined` stays "has any row" so Leave keeps working for
+// a waitlisted member too.
 const RUN_SELECT = `
   SELECT r.id, r.location, r.note, r.starts_at,
          r.organizer_id, r.organizer_username,
          r.photo_url, r.photo_file_id, r.type_label, r.duration_minutes,
-         r.distance_km,
+         r.distance_km, r.pace_seconds_per_km,
          r.meeting_point, r.meeting_lat, r.meeting_lng,
-         (SELECT COUNT(*) FROM run_attendees a WHERE a.run_id = r.id)::int
+         r.rsvp_cutoff_hours, r.capacity, r.series_id,
+         (SELECT COUNT(*) FROM run_attendees a
+          WHERE a.run_id = r.id AND COALESCE(a.status, 'going') = 'going')::int
            AS attendee_count,
+         (SELECT COUNT(*) FROM run_attendees a
+          WHERE a.run_id = r.id AND a.status = 'waitlisted')::int
+           AS waitlist_count,
          EXISTS (
            SELECT 1 FROM run_attendees a
            WHERE a.run_id = r.id AND a.user_id = $1
          ) AS joined,
+         (SELECT COALESCE(a.status, 'going') FROM run_attendees a
+          WHERE a.run_id = r.id AND a.user_id = $1) AS my_status,
          (SELECT COUNT(*) FROM run_kudos k WHERE k.run_id = r.id)::int
            AS kudos_count,
          EXISTS (
@@ -240,7 +258,8 @@ const RUN_SELECT = `
                     ROW_NUMBER() OVER (
                       ORDER BY (a.user_id = r.organizer_id) DESC, a.joined_at
                     ) AS ord
-             FROM run_attendees a WHERE a.run_id = r.id
+             FROM run_attendees a
+             WHERE a.run_id = r.id AND COALESCE(a.status, 'going') = 'going'
            ) p
            WHERE p.ord <= 3
          ), ARRAY[]::varchar[]) AS preview,
@@ -250,6 +269,168 @@ const RUN_SELECT = `
          ) AS reminders_off
   FROM runs r
 `;
+
+/* ── Weekly series ─────────────────────────────────────────────────────
+ * A series row is a template: weekday, wall-clock start time and the IANA
+ * timezone they live in. Reads materialise the next occurrence into `runs`
+ * when the series has no upcoming one, so only one week ever exists at a
+ * time. No new dependency: the timezone math is Intl + Date.
+ * ──────────────────────────────────────────────────────────────────── */
+
+const WEEKDAY_INDEX = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+// A timezone string is only trustworthy if Intl can use it. Anything else
+// (missing, typo'd, exotic) is rejected before it reaches the database.
+function validTimezone(tz) {
+  if (!tz || typeof tz !== 'string' || tz.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+// Wall-clock parts of an instant in a zone: year, month, day, hour (0-23),
+// minute and weekday as 0 = Sunday .. 6 = Saturday.
+function zonedParts(ms, tz) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', weekday: 'short',
+  }).formatToParts(new Date(ms));
+  const get = (type) => parts.find((p) => p.type === type).value;
+  return {
+    year: Number(get('year')),
+    month: Number(get('month')),
+    day: Number(get('day')),
+    hour: Number(get('hour')),
+    minute: Number(get('minute')),
+    weekday: WEEKDAY_INDEX[get('weekday')],
+  };
+}
+
+// Wall-clock parts in a zone → UTC instant, in two passes: read the zone's
+// offset at a naive guess, subtract it, then re-read the offset there and
+// subtract again if it moved. That second pass is what lands a run across
+// a DST change at the same local time (a nonexistent local time moves an
+// hour that week rather than failing).
+function zonedToUtc(y, m, d, h, min, tz) {
+  const guess = Date.UTC(y, m - 1, d, h, min);
+  const offsetAt = (t) => {
+    const p = zonedParts(t, tz);
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - t;
+  };
+  const off1 = offsetAt(guess);
+  let t = guess - off1;
+  const off2 = offsetAt(t);
+  if (off2 !== off1) t = guess - off2;
+  return t;
+}
+
+// pg hands TIME back as "HH:MM:SS"; only hours and minutes are stored.
+function parseLocalTime(v) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(v));
+  return m ? { h: Number(m[1]), min: Number(m[2]) } : null;
+}
+
+// First instant strictly after `afterMs` matching the series' weekday and
+// local time. `Date.UTC` rolls day overflow, so d + 7 / d + 14 are safe.
+function nextOccurrence(series, afterMs) {
+  const lt = parseLocalTime(series.local_time);
+  if (!lt) return null;
+  const p = zonedParts(afterMs, series.timezone);
+  const delta = (series.weekday - p.weekday + 7) % 7;
+  for (let extra = 0; extra <= 14; extra += 7) {
+    const t = zonedToUtc(p.year, p.month, p.day + delta + extra, lt.h, lt.min, series.timezone);
+    if (t > afterMs) return t;
+  }
+  return null;
+}
+
+// Give every series without an upcoming run its next week. Called at the
+// top of the two public run reads; a failure is logged and swallowed so a
+// broken series can never empty the board. The write is idempotent (row
+// lock + unique (series_id, starts_at)) and only ever creates the series
+// organizer's own next run.
+async function materialiseSeries() {
+  let due;
+  try {
+    ({ rows: due } = await pool.query(
+      `SELECT s.id FROM run_series s
+       WHERE NOT EXISTS (
+         SELECT 1 FROM runs r WHERE r.series_id = s.id AND r.starts_at >= NOW()
+       )`
+    ));
+  } catch (err) {
+    console.error('[series] scan failed:', err.message);
+    return;
+  }
+  for (const s of due) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const locked = await client.query(
+        `SELECT * FROM run_series WHERE id = $1 FOR UPDATE`, [s.id]);
+      if (!locked.rows.length) {
+        await client.query('ROLLBACK');
+        continue;
+      }
+      const series = locked.rows[0];
+      const stillOpen = await client.query(
+        `SELECT 1 FROM runs WHERE series_id = $1 AND starts_at >= NOW() LIMIT 1`,
+        [s.id]);
+      if (stillOpen.rows.length) {
+        await client.query('ROLLBACK');
+        continue;
+      }
+      // Strictly after the newest occurrence ever created, so a cancelled
+      // week is not re-created on the next read.
+      const afterMs = Math.max(Date.now(), new Date(series.last_starts_at).getTime());
+      const t = nextOccurrence(series, afterMs);
+      if (t == null) {
+        await client.query('ROLLBACK');
+        continue;
+      }
+      const startsAt = new Date(t).toISOString();
+      const ins = await client.query(
+        `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username,
+           photo_url, type_label, duration_minutes, distance_km,
+           meeting_point, meeting_lat, meeting_lng, rsvp_cutoff_hours, capacity, series_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         ON CONFLICT (series_id, starts_at) DO NOTHING
+         RETURNING id`,
+        [series.location, series.note, startsAt, series.organizer_id,
+         series.organizer_username, series.photo_url, series.type_label,
+         series.duration_minutes, series.distance_km, series.meeting_point,
+         series.meeting_lat, series.meeting_lng, series.rsvp_cutoff_hours,
+         series.capacity, series.id]);
+      if (ins.rows.length) {
+        const runId = ins.rows[0].id;
+        // Each week starts fresh: the organizer is going, everyone else
+        // joins again, and the waitlist does not carry over.
+        await client.query(
+          `INSERT INTO run_attendees (run_id, user_id, username, status)
+           VALUES ($1, $2, $3, 'going') ON CONFLICT DO NOTHING`,
+          [runId, series.organizer_id, series.organizer_username]);
+        await client.query(
+          `INSERT INTO run_reminders (run_id, user_id, remind_at)
+           VALUES ($1, $2, $3::timestamptz - ${REMINDER_LEAD})
+           ON CONFLICT (run_id, user_id) DO NOTHING`,
+          [runId, series.organizer_id, startsAt]);
+      }
+      await client.query(
+        `UPDATE run_series SET last_starts_at = $2 WHERE id = $1`,
+        [s.id, startsAt]);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      console.error('[series] materialise failed for', s.id, ':', err.message);
+    } finally {
+      client.release();
+    }
+  }
+}
 
 /* ── Run types API ─────────────────────────────────────────────────────
  * Presets are constants, never rows. Custom types are one member's own
@@ -366,6 +547,10 @@ app.delete('/api/run-types/:id', async (req, res) => {
 // List runs. `upcoming` is the default tab: anything that has not started
 // yet, soonest first. `past` reads the other way and is capped.
 app.get('/api/runs', async (req, res) => {
+  // A series whose latest week has started gets its next one here, so the
+  // board always shows the coming week even if nobody has opened the app
+  // since. Errors are swallowed inside.
+  await materialiseSeries();
   const past = req.query.filter === 'past';
   const q = String(req.query.q || '').trim();
   // Board search: a run matches when the query names its organizer or any
@@ -467,6 +652,19 @@ app.post('/api/runs', async (req, res) => {
   if (isNaN(startsAt.getTime())) {
     return res.status(400).json({ error: 'Pick a date and time.' });
   }
+  // An optional RSVP cutoff in whole hours before the start. Blank means
+  // "no cutoff" and stores NULL, so every existing run behaves exactly as
+  // it did before. The 1..72 range keeps the value sane for a club run
+  // (0 would lock instantly and would be indistinguishable from a bug).
+  const rawCutoff = req.body?.rsvp_cutoff_hours;
+  let rsvpCutoffHours = null;
+  if (rawCutoff !== undefined && rawCutoff !== null && String(rawCutoff).trim() !== '') {
+    const parsedCutoff = Number(rawCutoff);
+    if (!Number.isInteger(parsedCutoff) || parsedCutoff < 1 || parsedCutoff > MAX_CUTOFF_HOURS) {
+      return res.status(400).json({ error: 'Use an RSVP cutoff between 1 and 72 hours.' });
+    }
+    rsvpCutoffHours = parsedCutoff;
+  }
   if (startsAt.getTime() < Date.now() - FUTURE_SLACK_MS) {
     return res.status(400).json({ error: 'Pick a time in the future.' });
   }
@@ -493,15 +691,87 @@ app.post('/api/runs', async (req, res) => {
     }
     distanceKm = Math.round(parsed * 10) / 10;
   }
+  // Planned pace is optional, entered as "m:ss" per kilometre and stored
+  // as whole seconds. Not a clock time, so it is written as minutes and
+  // seconds, never through the date parser.
+  const rawPace = req.body?.pace;
+  let paceSeconds = null;
+  if (rawPace !== undefined && rawPace !== null && String(rawPace).trim() !== '') {
+    const m = String(rawPace).trim().match(/^(\d{1,2}):([0-5]\d)$/);
+    const seconds = m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    if (!seconds || seconds < MIN_PACE_SECONDS || seconds > MAX_PACE_SECONDS) {
+      return res.status(400).json({ error: 'Pace must be between 3:00 and 12:00 per km.' });
+    }
+    paceSeconds = seconds;
+  }
+  // Optional capacity: how many runners the run holds, counting the
+  // organizer. Blank means unlimited, so every run posted without one
+  // keeps today's behaviour; the range keeps a typo from shutting people
+  // out of a run they wanted.
+  const rawCapacity = req.body?.capacity;
+  let capacity = null;
+  if (rawCapacity !== undefined && rawCapacity !== null && String(rawCapacity).trim() !== '') {
+    const parsedCapacity = Number(rawCapacity);
+    if (!Number.isInteger(parsedCapacity) || parsedCapacity < 2 || parsedCapacity > 200) {
+      return res.status(400).json({ error: 'Use a capacity between 2 and 200 runners.' });
+    }
+    capacity = parsedCapacity;
+  }
+  // Optional weekly recurrence. The poster's device reports the timezone;
+  // the series stores the wall-clock weekday and time in it, so 7:00 AM
+  // stays 7:00 AM across clock changes.
+  let seriesInfo = null;
+  if (req.body?.repeats === 'weekly') {
+    const tz = String(req.body?.timezone ?? '').trim();
+    if (!validTimezone(tz)) {
+      return res.status(400).json({ error: 'We could not read your timezone.' });
+    }
+    const parts = zonedParts(startsAt.getTime(), tz);
+    seriesInfo = {
+      weekday: parts.weekday,
+      localTime: String(parts.hour).padStart(2, '0') + ':' +
+        String(parts.minute).padStart(2, '0') + ':00',
+      timezone: tz,
+    };
+  }
 
   const client = await pool.connect();
   try {
-    // The run and its organizer's attendance are one fact, so they land
-    // together or not at all.
+    // The run, its series and its organizer's attendance are one fact, so
+    // they land together or not at all.
     await client.query('BEGIN');
+    let seriesId = null;
+    if (seriesInfo) {
+      // The series is a template of this run: everything but the photo
+      // file id, whose upload is freed with the run, not the series.
+      const series = await client.query(
+        `INSERT INTO run_series (weekday, local_time, timezone, organizer_id, organizer_username, location, note, type_label, duration_minutes, distance_km, meeting_point, meeting_lat, meeting_lng, rsvp_cutoff_hours, capacity, photo_url, last_starts_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
+        [
+          seriesInfo.weekday,
+          seriesInfo.localTime,
+          seriesInfo.timezone,
+          req.user.id,
+          req.user.username,
+          location,
+          rawNote || null,
+          typeLabel,
+          durationMinutes,
+          distanceKm,
+          rawMeeting || null,
+          rawMeeting ? meetingLat : null,
+          rawMeeting ? meetingLng : null,
+          rsvpCutoffHours,
+          capacity,
+          photoUrl || null,
+          startsAt.toISOString(),
+        ]
+      );
+      seriesId = series.rows[0].id;
+    }
     const { rows } = await client.query(
-      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id, type_label, duration_minutes, distance_km, meeting_point, meeting_lat, meeting_lng)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+      `INSERT INTO runs (location, note, starts_at, organizer_id, organizer_username, photo_url, photo_file_id, type_label, duration_minutes, distance_km, pace_seconds_per_km, meeting_point, meeting_lat, meeting_lng, rsvp_cutoff_hours, capacity, series_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
       [
         location,
         rawNote || null,
@@ -513,14 +783,18 @@ app.post('/api/runs', async (req, res) => {
         typeLabel,
         durationMinutes,
         distanceKm,
+        paceSeconds,
         rawMeeting || null,
         rawMeeting ? meetingLat : null,
         rawMeeting ? meetingLng : null,
+        rsvpCutoffHours,
+        capacity,
+        seriesId,
       ]
     );
     const id = rows[0].id;
     await client.query(
-      `INSERT INTO run_attendees (run_id, user_id, username) VALUES ($1, $2, $3)
+      `INSERT INTO run_attendees (run_id, user_id, username, status) VALUES ($1, $2, $3, 'going')
        ON CONFLICT DO NOTHING`,
       [id, req.user.id, req.user.username]
     );
@@ -545,12 +819,15 @@ app.post('/api/runs', async (req, res) => {
 app.get('/api/runs/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad run id' });
+  await materialiseSeries();
   try {
     const { rows } = await pool.query(RUN_SELECT + ' WHERE r.id = $2', [callerId(req), id]);
     if (!rows.length) return res.status(404).json({ error: 'Run not found' });
-    // Organizer first, then in the order people joined.
+    // Organizer first, then in the order people joined. `status` lets the
+    // frontend split the roster into going and waitlisted.
     const attendees = await pool.query(
-      `SELECT a.user_id, a.username, (a.user_id = r.organizer_id) AS is_organizer
+      `SELECT a.user_id, a.username, (a.user_id = r.organizer_id) AS is_organizer,
+              COALESCE(a.status, 'going') AS status
        FROM run_attendees a JOIN runs r ON r.id = a.run_id
        WHERE a.run_id = $1
        ORDER BY (a.user_id = r.organizer_id) DESC, a.joined_at ASC`,
@@ -565,12 +842,21 @@ app.get('/api/runs/:id', async (req, res) => {
 // Shared guard: the run must exist and must not already have started.
 async function loadJoinableRun(id) {
   const { rows } = await pool.query(
-    `SELECT id, organizer_id, starts_at FROM runs WHERE id = $1`,
+    `SELECT id, organizer_id, starts_at, rsvp_cutoff_hours FROM runs WHERE id = $1`,
     [id]
   );
   if (!rows.length) return { error: 404, message: 'Run not found' };
   if (new Date(rows[0].starts_at).getTime() < Date.now()) {
     return { error: 409, message: 'That run has already happened.' };
+  }
+  // The cutoff is the same rule for joining AND leaving: a locked roster
+  // must not shrink after the organizer planned for it. Compute from the
+  // stored start time, never wall-clock rounding.
+  const cutoffMs =
+    new Date(rows[0].starts_at).getTime() - (rows[0].rsvp_cutoff_hours || 0) * 3600000;
+  if (rows[0].rsvp_cutoff_hours && Date.now() >= cutoffMs) {
+    return { error: 409, message: 'RSVPs are closed for this run. It locks ' +
+      rows[0].rsvp_cutoff_hours + ' hours before the start.', locked: true };
   }
   return { run: rows[0] };
 }
@@ -578,59 +864,126 @@ async function loadJoinableRun(id) {
 app.post('/api/runs/:id/join', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad run id' });
+  const client = await pool.connect();
   try {
     const guard = await loadJoinableRun(id);
     if (guard.error) return res.status(guard.error).json({ error: guard.message });
-    await pool.query(
-      `INSERT INTO run_attendees (run_id, user_id, username) VALUES ($1, $2, $3)
-       ON CONFLICT DO NOTHING`,
-      [id, req.user.id, req.user.username]
-    );
-    // Re-joining after a leave starts fresh with reminders on, so clear
-    // any opt-out left behind and schedule the reminder from the run's
-    // own start time.
-    await pool.query(
-      `INSERT INTO run_reminders (run_id, user_id, remind_at)
-       VALUES ($1, $2, (SELECT starts_at FROM runs WHERE id = $1) - ${REMINDER_LEAD})
+    await client.query('BEGIN');
+    // Locking the run row serialises two members racing for the last
+    // spot: the second one counts the first as going and waitlists.
+    const runRow = await client.query(
+      `SELECT capacity FROM runs WHERE id = $1 FOR UPDATE`, [id]);
+    const capacity = runRow.rows.length ? runRow.rows[0].capacity : null;
+    const counted = await client.query(
+      `SELECT COUNT(*)::int AS c FROM run_attendees
+       WHERE run_id = $1 AND COALESCE(status, 'going') = 'going'`, [id]);
+    const full = capacity != null && counted.rows[0].c >= capacity;
+    await client.query(
+      `INSERT INTO run_attendees (run_id, user_id, username, status) VALUES ($1, $2, $3, $4)
        ON CONFLICT (run_id, user_id) DO NOTHING`,
-      [id, req.user.id]
+      [id, req.user.id, req.user.username, full ? 'waitlisted' : 'going']
     );
-    await pool.query(
-      `DELETE FROM run_reminder_optouts WHERE run_id = $1 AND user_id = $2`,
-      [id, req.user.id]
-    );
-    res.json({ ok: true });
+    // An existing row keeps its stored status, so re-joining a waitlist
+    // never jumps the queue: read back whatever is there now.
+    const mine = await client.query(
+      `SELECT COALESCE(status, 'going') AS status FROM run_attendees
+       WHERE run_id = $1 AND user_id = $2`, [id, req.user.id]);
+    const status = mine.rows.length ? mine.rows[0].status : 'going';
+    if (status === 'going') {
+      // Re-joining after a leave starts fresh with reminders on, so clear
+      // any opt-out left behind and schedule the reminder from the run's
+      // own start time. Waitlisted members get no reminder until they
+      // have a spot.
+      await client.query(
+        `INSERT INTO run_reminders (run_id, user_id, remind_at)
+         VALUES ($1, $2, (SELECT starts_at FROM runs WHERE id = $1) - ${REMINDER_LEAD})
+         ON CONFLICT (run_id, user_id) DO NOTHING`,
+        [id, req.user.id]
+      );
+      await client.query(
+        `DELETE FROM run_reminder_optouts WHERE run_id = $1 AND user_id = $2`,
+        [id, req.user.id]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ ok: true, status: status });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 
 app.post('/api/runs/:id/leave', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad run id' });
+  const client = await pool.connect();
   try {
     const guard = await loadJoinableRun(id);
     if (guard.error) return res.status(guard.error).json({ error: guard.message });
     if (guard.run.organizer_id === req.user.id) {
       return res.status(409).json({ error: 'Organizers cannot leave their own run.' });
     }
-    await pool.query(`DELETE FROM run_attendees WHERE run_id = $1 AND user_id = $2`, [
-      id,
-      req.user.id,
-    ]);
+    await client.query('BEGIN');
+    const runRow = await client.query(
+      `SELECT capacity FROM runs WHERE id = $1 FOR UPDATE`, [id]);
+    const capacity = runRow.rows.length ? runRow.rows[0].capacity : null;
+    const deleted = await client.query(
+      `DELETE FROM run_attendees WHERE run_id = $1 AND user_id = $2 RETURNING status`,
+      [id, req.user.id]
+    );
     // Attendance carried the reminder schedule and the opt-out; leaving
     // drops both so a re-join starts clean.
-    await pool.query(
+    await client.query(
       `DELETE FROM run_reminders WHERE run_id = $1 AND user_id = $2`,
       [id, req.user.id]
     );
-    await pool.query(
+    await client.query(
       `DELETE FROM run_reminder_optouts WHERE run_id = $1 AND user_id = $2`,
       [id, req.user.id]
     );
+    // A going member leaving frees a spot: promote the earliest waitlisted
+    // member right here, in the same transaction, unless they turned
+    // reminders off (their spot waits for someone who wants to hear
+    // about it). NULL status on an old row reads as going.
+    const wasGoing = deleted.rows.length && (deleted.rows[0].status || 'going') === 'going';
+    if (wasGoing && capacity != null) {
+      const counted = await client.query(
+        `SELECT COUNT(*)::int AS c FROM run_attendees
+         WHERE run_id = $1 AND COALESCE(status, 'going') = 'going'`, [id]);
+      if (counted.rows[0].c < capacity) {
+        const next = await client.query(
+          `SELECT user_id, username FROM run_attendees
+           WHERE run_id = $1 AND status = 'waitlisted'
+           ORDER BY joined_at, user_id LIMIT 1`, [id]);
+        if (next.rows.length) {
+          const candidate = next.rows[0];
+          const opted = await client.query(
+            `SELECT 1 FROM run_reminder_optouts WHERE run_id = $1 AND user_id = $2`,
+            [id, candidate.user_id]);
+          if (!opted.rows.length) {
+            await client.query(
+              `UPDATE run_attendees SET status = 'going' WHERE run_id = $1 AND user_id = $2`,
+              [id, candidate.user_id]
+            );
+            await client.query(
+              `INSERT INTO run_reminders (run_id, user_id, remind_at)
+               VALUES ($1, $2, (SELECT starts_at FROM runs WHERE id = $1) - ${REMINDER_LEAD})
+               ON CONFLICT (run_id, user_id) DO NOTHING`,
+              [id, candidate.user_id]
+            );
+          }
+        }
+      }
+    }
+    await client.query('COMMIT');
     res.json({ ok: true });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -639,12 +992,30 @@ app.delete('/api/runs/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Bad run id' });
   try {
-    const { rows } = await pool.query(`SELECT organizer_id FROM runs WHERE id = $1`, [id]);
+    const { rows } = await pool.query(
+      `SELECT organizer_id, series_id FROM runs WHERE id = $1`, [id]);
     if (!rows.length) return res.status(404).json({ error: 'Run not found' });
     if (rows[0].organizer_id !== req.user.id) {
       return res.status(403).json({ error: 'Only the organizer can cancel this run.' });
     }
-    await pool.query(`DELETE FROM runs WHERE id = $1`, [id]);
+    // ?series=end stops the whole weekly run: the template row goes too,
+    // and past occurrences keep their rows with series_id NULLed by the
+    // foreign key. Without it, cancelling only lifts this week.
+    const endSeries = req.query.series === 'end' && rows[0].series_id != null;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`DELETE FROM runs WHERE id = $1`, [id]);
+      if (endSeries) {
+        await client.query(`DELETE FROM run_series WHERE id = $1`, [rows[0].series_id]);
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -879,6 +1250,8 @@ const SEED_PHOTO_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/
 
 // Seeded run ids live far above anything the app will ever allocate, so a
 // re-boot can address the same demo rows by id.
+// Pace is seconds per kilometre, spread so each pace band chip has at least
+// one match: 300/330 under or on 5:30, 390/420 in the middle band, 540 over.
 const SEED_RUNS = [
   {
     id: 900001,
@@ -887,6 +1260,12 @@ const SEED_RUNS = [
     type: 'Staging demo: Trail',
     duration: 30,
     distance: 5,
+    pace: 390,
+    // The RSVP row on this run's details is what the "Run detail shows the
+    // RSVP cutoff time" check asserts, so the demo run carries a cutoff.
+    // 2 hours before an 18:30 start keeps it open at most boot times and
+    // the row renders either way ("Closes" or "Closed").
+    cutoffHours: 2,
     dayOffset: 0,
     hour: 18,
     minute: 30,
@@ -906,6 +1285,7 @@ const SEED_RUNS = [
     type: null,
     dayOffset: 1,
     distance: 10,
+    pace: 300,
     hour: 7,
     minute: 0,
     organizer: [-902, 'staging-demo-ethan'],
@@ -915,12 +1295,41 @@ const SEED_RUNS = [
     meetingLng: -74.0102,
   },
   {
+    id: 900004,
+    location: 'Staging demo: Sunrise Hill',
+    note: 'Optional RSVP cutoff, still open',
+    type: null,
+    // Relative to boot time on purpose: a fixed wall-clock hour cannot
+    // keep a cutoff state stable across timezones and reboot times, and
+    // the conflict update re-runs on every boot, so the two demo runs
+    // below always sit on the correct side of their cutoff.
+    inHours: 48,
+    cutoffHours: 2,
+    pace: 540,
+    organizer: [-903, 'staging-demo-nina'],
+    joiners: [],
+  },
+  {
+    id: 900005,
+    location: 'Staging demo: River Boardwalk',
+    note: 'Optional RSVP cutoff, RSVPs closed',
+    type: null,
+    // Starts 2 hours out with a 3-hour cutoff, so its deadline passed an
+    // hour ago: the lock is already on at every boot, in every timezone.
+    inHours: 2,
+    cutoffHours: 3,
+    pace: 420,
+    organizer: [-902, 'staging-demo-ethan'],
+    joiners: [],
+  },
+  {
     id: 900003,
     location: 'Staging demo: Old Town loop',
     note: 'hills, take it steady',
     type: null,
     dayOffset: -3,
     distance: 21,
+    pace: 330,
     hour: 8,
     minute: 0,
     organizer: [-903, 'staging-demo-nina'],
@@ -932,8 +1341,23 @@ const SEED_RUNS = [
     note: null,
     type: null,
     dayOffset: 2,
+    pace: 540,
     hour: 9,
     minute: 0,
+    organizer: [-901, 'staging-demo-maya'],
+    joiners: [],
+  },
+  {
+    id: 900007,
+    location: 'Staging demo: Calendar export run',
+    note: 'fixed date, for the calendar export checks',
+    type: null,
+    // A fixed wall-clock start on purpose: the .ics export checks assert
+    // the exact DTSTART and the date inside the file name, which a
+    // boot-relative start could never pin. Kept well in the future; bump
+    // the date if it ever slips behind "today".
+    fixedStartsAt: '2027-03-14T12:00:00.000Z',
+    distance: 5,
     organizer: [-901, 'staging-demo-maya'],
     joiners: [],
   },
@@ -952,28 +1376,40 @@ function seedStartsAt(dayOffset, hour, minute) {
   return d.toISOString();
 }
 
+// Boot-relative starts for the cutoff demo runs: hours from now, so the
+// locked / open states do not depend on the container's timezone or on
+// what time of day it happens to be.
+function seedStartsIn(hours) {
+  return new Date(Date.now() + hours * 3600000).toISOString();
+}
+
 async function seedStaging() {
   for (const run of SEED_RUNS) {
     await pool.query(
-      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url, type_label, duration_minutes, distance_km, meeting_point, meeting_lat, meeting_lng)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username, photo_url, type_label, duration_minutes, distance_km, pace_seconds_per_km, meeting_point, meeting_lat, meeting_lng, rsvp_cutoff_hours)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        ON CONFLICT (id) DO UPDATE SET starts_at = EXCLUDED.starts_at,
          duration_minutes = EXCLUDED.duration_minutes,
-         distance_km = EXCLUDED.distance_km`,
+         distance_km = EXCLUDED.distance_km,
+         pace_seconds_per_km = EXCLUDED.pace_seconds_per_km,
+         rsvp_cutoff_hours = EXCLUDED.rsvp_cutoff_hours`,
       [
         run.id,
         run.location,
         run.note,
-        seedStartsAt(run.dayOffset, run.hour, run.minute),
+        run.fixedStartsAt ||
+          (run.inHours != null ? seedStartsIn(run.inHours) : seedStartsAt(run.dayOffset, run.hour, run.minute)),
         run.organizer[0],
         run.organizer[1],
         run.photoUrl || null,
         run.type || null,
         run.duration || null,
         run.distance || null,
+        run.pace || null,
         run.meeting || null,
         run.meeting ? run.meetingLat : null,
         run.meeting ? run.meetingLng : null,
+        run.cutoffHours || null,
       ]
     );
     for (const [userId, username] of [run.organizer, ...run.joiners]) {
@@ -1057,6 +1493,68 @@ async function seedStaging() {
   );
   // The explicit ids above bypass the sequence; push it past them so the
   // first run a tester posts does not collide with a demo row.
+  await pool.query(
+    `SELECT setval(pg_get_serial_sequence('runs', 'id'),
+                   GREATEST((SELECT COALESCE(MAX(id), 1) FROM runs), 1))`
+  );
+  // Weekly series demo: one series whose next occurrence always sits in
+  // the future, a full run on it (capacity 3, three going) and one member
+  // waiting, so the waitlist states render on a fresh staging database.
+  // The weekday and wall-clock time come from tomorrow 07:00 in UTC, and
+  // starts_at is that series' next occurrence, so the demo row always
+  // lands on the Upcoming tab however late the container boots.
+  const demoWeekdayBase = new Date();
+  demoWeekdayBase.setUTCHours(7, 0, 0, 0);
+  demoWeekdayBase.setUTCDate(demoWeekdayBase.getUTCDate() + 1);
+  const demoStartMs = nextOccurrence({
+    weekday: demoWeekdayBase.getUTCDay(),
+    local_time: '07:00:00',
+    timezone: 'UTC',
+  }, Date.now());
+  const demoStartsAt = new Date(demoStartMs).toISOString();
+  await pool.query(
+    `INSERT INTO run_series (id, weekday, local_time, timezone, organizer_id, organizer_username,
+       location, note, duration_minutes, distance_km, capacity, last_starts_at)
+     VALUES (920001, $1, '07:00:00', 'UTC', -903, 'staging-demo-nina',
+       'Staging demo: Weekly track session', 'same time every week', 45, 5, 3, $2)
+     ON CONFLICT (id) DO UPDATE SET weekday = EXCLUDED.weekday,
+       local_time = EXCLUDED.local_time, timezone = EXCLUDED.timezone,
+       capacity = EXCLUDED.capacity, last_starts_at = EXCLUDED.last_starts_at,
+       duration_minutes = EXCLUDED.duration_minutes, distance_km = EXCLUDED.distance_km`,
+    [demoWeekdayBase.getUTCDay(), demoStartsAt]
+  );
+  await pool.query(
+    `INSERT INTO runs (id, location, note, starts_at, organizer_id, organizer_username,
+       type_label, duration_minutes, distance_km, series_id, capacity)
+     VALUES (900006, 'Staging demo: Weekly track session', 'same time every week', $1,
+       -903, 'staging-demo-nina', NULL, 45, 5, 920001, 3)
+     ON CONFLICT (id) DO UPDATE SET starts_at = EXCLUDED.starts_at,
+       series_id = EXCLUDED.series_id, capacity = EXCLUDED.capacity,
+       duration_minutes = EXCLUDED.duration_minutes, distance_km = EXCLUDED.distance_km`,
+    [demoStartsAt]
+  );
+  // Seed attendee rows set status explicitly: three going fill the
+  // capacity, Omar is the one waiting. Never the visiting user.
+  const DEMO_WAITLIST = [
+    [-903, 'staging-demo-nina', 'going'],
+    [-902, 'staging-demo-ethan', 'going'],
+    [-901, 'staging-demo-maya', 'going'],
+    [-905, 'staging-demo-omar', 'waitlisted'],
+  ];
+  for (const [userId, username, status] of DEMO_WAITLIST) {
+    await pool.query(
+      `INSERT INTO run_attendees (run_id, user_id, username, status) VALUES (900006, $1, $2, $3)
+       ON CONFLICT (run_id, user_id) DO NOTHING`,
+      [userId, username, status]
+    );
+  }
+  await pool.query(
+    `SELECT setval(pg_get_serial_sequence('run_series', 'id'),
+                   GREATEST((SELECT COALESCE(MAX(id), 1) FROM run_series), 1))`
+  );
+  // Again after 900006: this block runs below the setval above, so the
+  // sequence has to be pushed past the demo run here or the first posted
+  // run collides with it.
   await pool.query(
     `SELECT setval(pg_get_serial_sequence('runs', 'id'),
                    GREATEST((SELECT COALESCE(MAX(id), 1) FROM runs), 1))`
@@ -1157,6 +1655,62 @@ async function migrate() {
   await pool.query(`
     ALTER TABLE runs
       ADD COLUMN IF NOT EXISTS duration_minutes SMALLINT
+  `);
+  // Optional RSVP cutoff, in whole hours before the run starts. NULL means
+  // no cutoff, which is every run posted before this feature and every run
+  // posted without one after it.
+  await pool.query(`
+    ALTER TABLE runs
+      ADD COLUMN IF NOT EXISTS rsvp_cutoff_hours SMALLINT
+  `);
+  // Optional planned pace, in whole seconds per kilometre. NULL means no
+  // pace, which is every run posted before this feature and every run
+  // posted without one; a NULL pace matches every pace filter chip.
+  await pool.query(`
+    ALTER TABLE runs
+      ADD COLUMN IF NOT EXISTS pace_seconds_per_km INTEGER
+  `);
+  // Weekly series template. Public like runs: it holds only what a run
+  // card already shows (place, wall-clock time, zone, organizer). Created
+  // before the runs column that references it.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS run_series (
+      id SERIAL PRIMARY KEY,
+      weekday SMALLINT NOT NULL CHECK (weekday >= 0 AND weekday <= 6),
+      local_time TIME NOT NULL,
+      timezone VARCHAR(64) NOT NULL,
+      organizer_id INTEGER NOT NULL,
+      organizer_username VARCHAR(255) NOT NULL,
+      location VARCHAR(120) NOT NULL,
+      note VARCHAR(200),
+      type_label VARCHAR(30),
+      duration_minutes SMALLINT,
+      distance_km DOUBLE PRECISION,
+      meeting_point VARCHAR(120),
+      meeting_lat DOUBLE PRECISION,
+      meeting_lng DOUBLE PRECISION,
+      rsvp_cutoff_hours SMALLINT,
+      capacity SMALLINT,
+      photo_url VARCHAR(500),
+      last_starts_at TIMESTAMPTZ NOT NULL
+    )
+  `);
+  await pool.query(`
+    ALTER TABLE runs
+      ADD COLUMN IF NOT EXISTS series_id INTEGER REFERENCES run_series(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS capacity SMALLINT
+  `);
+  // Race backstop for materialisation: one run per series per start time,
+  // no matter how many readers materialise at once. NULL series_id rows
+  // never conflict (NULLs are distinct in a unique index).
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS runs_series_starts_idx ON runs (series_id, starts_at)`
+  );
+  // going or waitlisted; NULL reads as going, so every attendee row from
+  // before the waitlist keeps its meaning.
+  await pool.query(`
+    ALTER TABLE run_attendees
+      ADD COLUMN IF NOT EXISTS status VARCHAR(12) CHECK (status IN ('going', 'waitlisted'))
   `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS run_type_labels (

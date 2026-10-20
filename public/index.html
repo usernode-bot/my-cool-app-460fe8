@@ -64,7 +64,7 @@
   })();
   </script>
   <title>Run Club</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%230a7aff'/><text x='50' y='68' font-size='52' text-anchor='middle'>%F0%9F%8F%83</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23c2410c'/><text x='50' y='68' font-size='52' text-anchor='middle'>%F0%9F%8F%83</text></svg>">
 
   <!-- Display mode (theme). This runs BEFORE the stylesheet and before any
        markup, because the `dark` class it writes onto <html> is what the
@@ -240,10 +240,10 @@
       src: url(/fonts/quicksand-latin-ext.woff2) format('woff2');
       unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
     }
-    /* Re-theme the kit to Run Club's blue. Physics and geometry stay the
-       kit's; only the color tokens are ours. */
+    /* Re-theme the kit to Run Club's track orange. Physics and geometry
+       stay the kit's; only the color tokens are ours. */
     :root {
-      --un-accent: #0a68e0;
+      --un-accent: #c2410c;
       --un-accent-contrast: #ffffff;
       --un-group-bg: #ffffff;
       --un-sheet-bg: #ffffff;
@@ -303,7 +303,10 @@
     <!-- ── Home ─────────────────────────────────────────────────────── -->
     <section id="screen-home" class="px-5 pb-24">
       <header class="flex items-start justify-between gap-4">
-        <h1 class="text-[40px] font-extrabold tracking-tight leading-none pt-1">Run Club</h1>
+        <div>
+          <h1 class="text-[40px] font-extrabold tracking-tight leading-none pt-1">Run Club</h1>
+          <p id="app-tagline" class="mt-1.5 text-[15px] text-[#62626a] dark:text-[#b0b0b8]">Lace up and run together.</p>
+        </div>
         <div class="shrink-0 flex items-center gap-2 pt-0.5">
           <!-- The glyph itself is drawn by renderTheme() so it always shows
                the mode that is actually in force. -->
@@ -331,7 +334,7 @@
         bg-white dark:bg-[#1c1c20] text-[#111114] dark:text-white
         border border-[#ececf0] dark:border-[#2c2c31]
         placeholder:text-[#8e8e93] dark:placeholder:text-[#98989f]
-        border border-[#ececf0] dark:border-[#2c2c31] outline-none focus:ring-2 focus:ring-[#0a68e0]/40" />
+        border border-[#ececf0] dark:border-[#2c2c31] outline-none focus:ring-2 focus:ring-[#c2410c]/40" />
 
       <div class="mt-8 mb-2.5 px-1 flex items-center justify-between gap-3">
         <h2 id="list-heading" class="text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">UPCOMING RUNS</h2>
@@ -353,6 +356,15 @@
           class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">10K</button>
         <button id="dist-half" type="button" data-dist="half" aria-pressed="false"
           class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">Half</button>
+      </div>
+      <div id="pace-filter" role="group" aria-label="Filter by pace"
+        class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        <button id="pace-fast" type="button" data-pace="fast" aria-pressed="false"
+          class="pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">Under 5:30</button>
+        <button id="pace-steady" type="button" data-pace="steady" aria-pressed="false"
+          class="pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">5:30 to 6:30</button>
+        <button id="pace-easy" type="button" data-pace="easy" aria-pressed="false"
+          class="pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">Over 6:30</button>
       </div>
       <div id="run-list" class="space-y-3.5"></div>
     </section>
@@ -413,6 +425,15 @@
     // server is authoritative for validation, this list drives the picker,
     // and a label is only valid if BOTH sides know it.
     var PRESET_TYPES = ['Easy', 'Tempo', 'Long Run', 'Intervals', 'Race'];
+    // One-line descriptions for the type picker menu, keyed by preset
+    // name. Menu rows carry a single line, so the hint rides in the label.
+    var PRESET_HINTS = {
+      'Easy': 'relaxed, chatty pace',
+      'Tempo': 'steady and comfortably hard',
+      'Long Run': 'more distance, slower pace',
+      'Intervals': 'fast repeats with rests',
+      'Race': 'an event or time trial',
+    };
 
     /* ── Meeting-point pin: static map thumbnail ───────────────────── */
 
@@ -493,13 +514,17 @@
       // same way ?tf= seeds the format switch. Never persisted.
       q: (params.get('q') || '').trim(),
       runs: [],
+      loading: false,    // first load in flight: the list shows skeleton cards
+      loadError: false,  // the last load failed: the list shows a retry row
       customTypes: [],   // the signed-in member's own types, from /api/run-types
       detail: null,      // { run, attendees, comments }
       screen: 'home',
       sheet: null,
+      calSheet: null,    // the Add to calendar duration sheet, { handle, overlay }
       me: null,          // resolved from the first API response we own
       timeFormat: 'auto', // mode: 'auto' (follow the locale), '12' or '24'; resolved at boot below
       dist: [],          // active distance chips, e.g. ['5k']; empty shows everything
+      pace: [],          // active pace chips, e.g. ['steady']; empty shows everything
     };
 
     // One definition per chip: the km window it matches and the words the
@@ -521,6 +546,35 @@
       return state.dist.filter(function (id) { return !!DIST_FILTERS[id]; });
     }
 
+    // One definition per pace chip: the seconds-per-km window it matches and
+    // the words the chip reads. Bands meet at 5:30 and 6:30, so the middle
+    // band takes both boundaries and a run exactly on 5:30 or 6:30 counts as
+    // steady. A run with no planned pace matches every chip, because the
+    // chips can only narrow down runs that said what their pace is.
+    var PACE_FILTERS = {
+      'fast': { max: 330, label: 'Under 5:30' },
+      'steady': { min: 330, max: 390, label: '5:30 to 6:30' },
+      'easy': { min: 390, label: 'Over 6:30' },
+    };
+
+    function paceInRange(run, filterId) {
+      // Number(null) is 0, which would read as a 0:00 pace; test for the
+      // column being unset before converting, so an unmarked run matches
+      // every chip instead of only the fast one.
+      if (run.pace_seconds_per_km == null) return true;
+      var p = Number(run.pace_seconds_per_km);
+      if (!Number.isFinite(p)) return true;
+      var f = PACE_FILTERS[filterId];
+      if (!f) return false;
+      if (f.max === undefined) return p > f.min;
+      if (f.min === undefined) return p < f.max;
+      return p >= f.min && p <= f.max;
+    }
+
+    function activePaceFilters() {
+      return state.pace.filter(function (id) { return !!PACE_FILTERS[id]; });
+    }
+
     // Training plan presets for the New Run sheet. Frontend-only: picking
     // one pre-fills the optional distance field and shows a weekly mileage
     // suggestion as a hint. Values stay editable and runs posted without a
@@ -535,6 +589,11 @@
     // day/time picks, instead of painting itself blue.
     var PLAN_ON = 'plan-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
     var PLAN_OFF = 'plan-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]';
+    // The Repeats row's own chip pair: copies of the plan states with a
+    // repeat-chip prefix, so the plan handler's .plan-chip query never
+    // picks these up. Whole literals, same reason as everywhere above.
+    var REPEAT_ON = 'repeat-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
+    var REPEAT_OFF = 'repeat-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]';
 
     /* ── Small helpers ─────────────────────────────────────────────── */
 
@@ -564,6 +623,40 @@
 
     function notify(message) {
       if (window.unNative && unNative.toast) unNative.toast(message);
+    }
+
+    /* ── RSVP cutoff ──────────────────────────────────────────────── */
+
+    // An optional cutoff locks joining X whole hours before the run starts.
+    // All three helpers read the run's own start time, so a card rendered
+    // minutes apart stays consistent.
+    function cutoffDeadline(run) {
+      var hours = Number(run.rsvp_cutoff_hours);
+      if (!Number.isFinite(hours) || hours < 1) return null;
+      return new Date(run.starts_at).getTime() - hours * 3600000;
+    }
+
+    function cutoffLocked(run) {
+      var deadline = cutoffDeadline(run);
+      return deadline != null && Date.now() >= deadline;
+    }
+
+    // The sentence the detail screen shows and the card chip reuses a
+    // compact form of. Plain hours only; the sheet caps the field at 72.
+    function fmtCutoff(run) {
+      var hours = Number(run.rsvp_cutoff_hours);
+      if (!Number.isFinite(hours) || hours < 1) return '';
+      return 'RSVP closes ' + hours + (hours === 1 ? ' hour' : ' hours') + ' before start';
+    }
+
+    function fmtCutoffClock(d) {
+      var day;
+      try {
+        day = new Intl.DateTimeFormat(locale, {
+          weekday: 'short', month: 'short', day: 'numeric',
+        }).format(d);
+      } catch (err) { day = ''; }
+      return (day ? day + ' · ' : '') + fmtTime(d);
     }
 
     /* ── Run types ────────────────────────────────────────────────── */
@@ -817,6 +910,17 @@
       return h + ' h' + (rest ? ' ' + rest + ' min' : '');
     }
 
+    // Planned pace as runners write it, minutes and seconds per kilometre
+    // ("6:30"). The "/ km" unit rides with the caller, since the chip and the
+    // detail row word it slightly differently. Not a clock time, so fmtTime
+    // is not involved.
+    function fmtPace(seconds) {
+      var s = Number(seconds);
+      if (!Number.isFinite(s) || s < 1) return '';
+      s = Math.round(s);
+      return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }
+
     function badgeHtml(info) {
       // Today and Tomorrow wear the app's one quiet gray chip, same as the
       // type and distance badges: the label carries the meaning, not a hue.
@@ -904,7 +1008,7 @@
       if (past) {
         var mine = run.kudos_from_me;
         var kudosCls = mine
-          ? 'kudos-btn shrink-0 px-4 py-2 rounded-full bg-[#0a68e0] text-white text-[15px] font-semibold'
+          ? 'kudos-btn shrink-0 px-4 py-2 rounded-full bg-[#c2410c] text-white text-[15px] font-semibold'
           : 'kudos-btn shrink-0 px-4 py-2 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[15px] font-semibold';
         kudos = '<button type="button" class="' + kudosCls + '" data-id="' + run.id + '"' +
           (mine ? ' aria-pressed="true"' : '') +
@@ -912,59 +1016,136 @@
           '>Kudos ' + (run.kudos_count || 0) + '</button>';
       }
 
+      // A cutoff hides the join tap entirely once it has passed, exactly
+      // as a started run does; the red chip explains why. The Joined
+      // state is untouched: people who made it in keep their spot.
       var action = '';
       if (!past) {
-        action = run.joined
-          ? '<button type="button" class="join-btn shrink-0 px-5 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[17px] font-semibold" data-id="' + run.id + '" data-joined="1">Joined</button>'
-          : '<button type="button" class="join-btn shrink-0 px-6 py-2.5 rounded-full bg-[#0a68e0] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0">Join</button>';
+        var locked = cutoffLocked(run);
+        var full = run.capacity != null && count >= run.capacity;
+        if (run.joined) {
+          if (run.my_status === 'waitlisted') {
+            // Same quiet gray pill as Joined; the word carries the state.
+            action = '<button type="button" class="join-btn shrink-0 px-5 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[17px] font-semibold" data-id="' + run.id + '" data-joined="1" data-status="waitlisted">Waitlisted</button>';
+          } else {
+            action = '<button type="button" class="join-btn shrink-0 px-5 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[17px] font-semibold" data-id="' + run.id + '" data-joined="1">Joined</button>';
+          }
+        } else if (locked) {
+          action = '<span class="shrink-0 px-3 py-1 rounded-full bg-[#ffe4e2] dark:bg-[#3a1715] text-[#b42318] dark:text-[#ff6961] text-[15px] font-semibold">RSVP closed</span>';
+        } else {
+          // A full run still joins: the tap waitlists rather than refuses.
+          // The cutoff lock wins over both, handled above.
+          action = '<button type="button" class="join-btn shrink-0 ' + (full ? 'px-5' : 'px-6') + ' py-2.5 rounded-full bg-[#0a68e0] text-white text-[17px] font-semibold" data-id="' + run.id + '" data-joined="0"' + (full ? ' data-full="1"' : '') + '>' + (full ? 'Join waitlist' : 'Join') + '</button>';
+        }
+      }
+
+      // A small calendar icon beside the action, on upcoming runs only:
+      // one tap opens the export sheet without leaving the board.
+      var calIcon = '';
+      if (!past) {
+        calIcon =
+          '<button type="button" class="cal-card-btn un-touch-target shrink-0 w-9 h-9 rounded-full bg-white dark:bg-[#1c1c20] border border-[#ececf0] dark:border-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] flex items-center justify-center" data-cal-icon="1" data-id="' + run.id + '" aria-label="Add to calendar">' +
+          '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4"/></svg>' +
+          '</button>';
       }
 
       return '<div class="run-card un-pressable bg-white dark:bg-[#1c1c20] rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.08)]" role="button" tabindex="0" data-id="' + run.id + '">' +
         '<div class="flex gap-3">' + mediaHtml(run) +
           '<div class="min-w-0 flex-1">' +
-            '<h3 class="text-[19px] font-bold leading-tight truncate">' + esc(run.location) + '</h3>' +
-            '<div class="mt-1.5 flex items-center gap-2">' + badgeHtml(info) +
-              '<span class="run-time text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' + esc(fmtTime(when)) + '</span>' +
+            '<h3 class="text-[19px] font-bold leading-tight line-clamp-2">' + esc(run.location) + '</h3>' +
+            '<div class="mt-1.5 flex flex-wrap items-center gap-2">' + badgeHtml(info) +
+              '<span class="run-time whitespace-nowrap text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' + esc(fmtTime(when)) + '</span>' +
+              (run.series_id
+                ? '<span data-weekly="1" class="shrink-0 px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[14px] font-semibold">Weekly</span>'
+                : '') +
               (run.duration_minutes
-                ? '<span class="min-w-0 truncate text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' + esc(fmtDuration(run.duration_minutes)) + '</span>'
+                ? '<span class="whitespace-nowrap text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' + esc(fmtDuration(run.duration_minutes)) + '</span>'
                 : '') +
               (run.type_label
-                ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[14px] font-semibold">' + esc(run.type_label) + '</span>'
+                ? '<span class="shrink-0 px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[14px] font-semibold">' + esc(run.type_label) + '</span>'
                 : '') +
               (run.distance_km
-                ? '<span class="min-w-0 truncate px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[14px] font-semibold">' + esc(fmtKm(run.distance_km)) + '</span>'
+                ? '<span class="shrink-0 px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[14px] font-semibold">' + esc(fmtKm(run.distance_km)) + '</span>'
+                : '') +
+              (run.pace_seconds_per_km
+                ? '<span data-pace="1" class="shrink-0 px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[14px] font-semibold">' + esc(fmtPace(run.pace_seconds_per_km)) + ' /km</span>'
                 : '') + '</div>' +
+            // The cutoff reads as a sentence, not a chip: it gets its own
+            // line so the day, time and quiet chips always show whole.
+            (!past && run.rsvp_cutoff_hours
+              ? '<div class="mt-1.5 flex"><span data-cutoff="' + (cutoffLocked(run) ? 'locked' : 'open') + '" class="shrink-0 px-2 py-0.5 rounded-md text-[14px] font-semibold ' + (cutoffLocked(run)
+                  ? 'bg-[#ffe4e2] dark:bg-[#3a1715] text-[#b42318] dark:text-[#ff6961]'
+                  : 'bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8]') + '">' + esc(fmtCutoff(run)) + '</span></div>' : '') +
             note +
           '</div>' +
         '</div>' +
         '<div class="mt-3.5 flex items-center justify-between gap-3">' +
           '<div class="flex items-center min-w-0">' + clusterHtml(run.preview) +
-            '<span class="ml-2 text-[17px] text-[#62626a] dark:text-[#b0b0b8] truncate">' + count + ' ' + (past ? 'went' : 'going') + '</span>' +
-          '</div>' + action + kudos +
+            '<span class="ml-2 text-[17px] text-[#62626a] dark:text-[#b0b0b8] truncate">' +
+              (!past && run.capacity != null
+                ? count + ' of ' + run.capacity + ' going'
+                : count + ' ' + (past ? 'went' : 'going')) + '</span>' +
+          '</div>' +
+          '<div class="flex items-center gap-2 shrink-0">' + calIcon + action + kudos + '</div>' +
         '</div>' +
       '</div>';
     }
 
+    // Three gray stand-ins in the real cards' shape and radius, so the
+    // first load does not read as an empty or broken screen.
+    var SKELETON_CARD =
+      '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.08)] mb-3.5" aria-hidden="true">' +
+        '<div class="flex gap-3">' +
+          '<div class="w-[52px] h-[52px] shrink-0 rounded-2xl bg-[#e9e9ef] dark:bg-[#2c2c31] animate-pulse"></div>' +
+          '<div class="min-w-0 flex-1">' +
+            '<div class="h-5 w-3/5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] animate-pulse"></div>' +
+            '<div class="mt-2.5 h-4 w-2/5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] animate-pulse"></div>' +
+            '<div class="mt-3.5 flex items-center justify-between">' +
+              '<div class="h-4 w-1/3 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] animate-pulse"></div>' +
+              '<div class="h-[38px] w-[96px] rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] animate-pulse"></div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
     function renderList() {
       headingEl.textContent = state.tab === 'past' ? 'PAST RUNS' : 'UPCOMING RUNS';
+      if (state.loadError) {
+        // An inline retry row, not a toast: the failure explains itself
+        // where the runs were meant to be.
+        listEl.innerHTML = '<div class="py-12 text-center">' +
+          '<p class="text-[17px] text-[#62626a] dark:text-[#b0b0b8]">Could not load runs. Check your connection and try again.</p>' +
+          '<button id="retry-runs" type="button" class="mt-4 px-6 py-2.5 rounded-full bg-[#0a68e0] text-white text-[17px] font-semibold">Try again</button>' +
+        '</div>';
+        return;
+      }
+      if (state.loading && !state.runs.length) {
+        listEl.innerHTML = SKELETON_CARD + SKELETON_CARD + SKELETON_CARD;
+        return;
+      }
       var active = activeDistanceFilters();
-      var shown = active.length
-        ? state.runs.filter(function (run) {
-            return active.some(function (id) { return distInRange(run, id); });
-          })
-        : state.runs;
+      var activePace = activePaceFilters();
+      var shown = state.runs.filter(function (run) {
+        if (active.length &&
+            !active.some(function (id) { return distInRange(run, id); })) return false;
+        if (activePace.length &&
+            !activePace.some(function (id) { return paceInRange(run, id); })) return false;
+        return true;
+      });
       if (!state.runs.length) {
         listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' +
           (state.q
             ? 'No runs match "' + esc(state.q) + '". Try another name.'
             : state.tab === 'past'
-            ? 'No past runs yet.'
-            : 'No upcoming runs. Tap + to post one.') + '</p>';
+            ? 'No past runs yet. Finished runs show up here.'
+            : 'No upcoming runs. Lace up and tap + to post one.') + '</p>';
         return;
       }
       if (!shown.length) {
         listEl.innerHTML = '<p class="py-12 text-center text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' +
-          'No runs match these distances. Tap a chip again to clear it.</p>';
+          (activePace.length
+            ? 'No runs match these paces. Tap a chip again to clear it.'
+            : 'No runs match these distances. Tap a chip again to clear it.') + '</p>';
         return;
       }
       listEl.innerHTML = shown.map(cardHtml).join('');
@@ -983,11 +1164,17 @@
     function loadRuns() {
       var qs = 'filter=' + state.tab +
         (state.q ? '&q=' + encodeURIComponent(state.q) : '');
+      state.loading = true;
+      state.loadError = false;
+      renderList();
       return api('/api/runs?' + qs).then(function (data) {
         state.runs = data.runs || [];
+        state.loading = false;
         renderList();
       }).catch(function (err) {
-        notify(err.message);
+        state.loading = false;
+        state.loadError = true;
+        renderList();
       });
     }
 
@@ -999,12 +1186,33 @@
       var whenText = info.label + ' · ' + fmtTime(when);
       var isPast = when.getTime() < Date.now();
       var count = run.attendee_count || 0;
+      // The roster splits into going and waitlisted; the server already
+      // orders attendees organizer-first then by join time, so the
+      // waitlist keeps its first-come order after the filter.
+      var waitlisted = (attendees || []).filter(function (a) { return a.status === 'waitlisted'; });
+      var waitlistPos = 0;
+      if (run.my_status === 'waitlisted' && tokenClaims && tokenClaims.id != null) {
+        waitlisted.some(function (a, i) {
+          if (a.user_id === tokenClaims.id) { waitlistPos = i + 1; return true; }
+          return false;
+        });
+      }
+      var isFull = run.capacity != null && count >= run.capacity;
 
       var action = '';
       if (!isPast && !run.is_organizer) {
-        action = run.joined
-          ? '<button id="detail-action" type="button" data-action="leave" class="shrink-0 px-6 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[17px] font-semibold">Leave</button>'
-          : '<button id="detail-action" type="button" data-action="join" class="shrink-0 px-7 py-2.5 rounded-full bg-[#0a68e0] text-white text-[17px] font-semibold">Join</button>';
+        var locked = cutoffLocked(run);
+        if (run.joined) {
+          if (run.my_status === 'waitlisted') {
+            action = '<button id="detail-action" type="button" data-action="leave" class="shrink-0 px-6 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[17px] font-semibold">Leave waitlist</button>';
+          } else {
+            action = '<button id="detail-action" type="button" data-action="leave" class="shrink-0 px-6 py-2.5 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[17px] font-semibold">Leave</button>';
+          }
+        } else if (locked) {
+          action = '<span id="rsvp-closed" class="shrink-0 px-3 py-1 rounded-full bg-[#ffe4e2] dark:bg-[#3a1715] text-[#ff3b30] dark:text-[#ff6961] text-[15px] font-semibold">RSVPs closed</span>';
+        } else {
+          action = '<button id="detail-action" type="button" data-action="join"' + (isFull ? ' data-full="1"' : '') + ' class="shrink-0 px-7 py-2.5 rounded-full bg-[#0a68e0] text-white text-[17px] font-semibold">' + (isFull ? 'Join waitlist' : 'Join') + '</button>';
+        }
       }
 
       var note = run.note
@@ -1017,7 +1225,7 @@
         ? '<img id="detail-photo" src="' + esc(run.photo_url) + '" alt="" class="w-full aspect-[16/9] rounded-2xl object-cover">'
         : '';
 
-      // The meeting point sits between When and Going, per the request, and
+      // The meeting point sits between When and Confirmed, per the request, and
       // is omitted entirely when the run has none. The thumbnail renders at
       // 320px in this stack, so the same zoom that serves the sheet serves it.
       var meeting = (run.meeting_point && run.meeting_lat != null && run.meeting_lng != null)
@@ -1065,18 +1273,49 @@
       var TAG = 'M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01';
       var CAL = 'M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4';
       var CLOCK = 'M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v5l3.5 2';
+      var CUTOFF = 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2';
       var DIST_ICON = 'M4 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0M4 7c2-2 4-2 6 0s4 2 6 0 4-2 6 0';
+      var PACE = 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 12l4-3M12 7v1';
       var PEOPLE = 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6 6 0 0112 0M17.5 11.5a3 3 0 100-6M18 20a5.5 5.5 0 00-2-4.3';
+      var REPEAT_ICON = 'M21 12a9 9 0 11-2.64-6.36M21 3v6h-6';
+
+      // Add to calendar: a full-width neutral action between the summary
+      // and the facts, on upcoming runs only. A finished run has nothing
+      // left to put in a calendar, so it keeps just its Kudos card.
+      var calCard = '';
+      if (!isPast) {
+        calCard =
+          '<button id="cal-detail-btn" type="button" aria-label="Add to calendar" class="w-full flex items-center gap-3 px-4 py-4 rounded-2xl ' +
+          'bg-white dark:bg-[#1c1c20] border border-[#ececf0] dark:border-[#2c2c31] text-[19px] font-medium">' +
+          '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="' + CAL + '"/></svg>' +
+          '<span>Add to calendar</span>' +
+          '</button>';
+      }
+
+      // The cutoff reads as a timestamp, so the sentence stays true no
+      // matter how long the screen stays open.
+      var cutoffDeadlineDate = cutoffDeadline(run);
+      var cutoffText = '';
+      if (cutoffDeadlineDate) {
+        cutoffText = cutoffLocked(run)
+          ? 'Closed ' + fmtCutoffClock(cutoffDeadlineDate)
+          : 'Closes ' + fmtCutoffClock(cutoffDeadlineDate);
+      }
 
       // data-type / data-duration let the checks tell a detailed run from a
       // bare one without asserting on text that may not be there.
-      var facts = '<div data-type="' + (run.type_label ? '1' : '0') + '" data-duration="' + (run.duration_minutes ? '1' : '0') + '" data-distance="' + (run.distance_km ? '1' : '0') + '" class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
+      var facts = '<div data-type="' + (run.type_label ? '1' : '0') + '" data-duration="' + (run.duration_minutes ? '1' : '0') + '" data-cutoff-run="' + (run.rsvp_cutoff_hours ? '1' : '0') + '" data-distance="' + (run.distance_km ? '1' : '0') + '" data-pace-run="' + (run.pace_seconds_per_km ? '1' : '0') + '" class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' +
         infoRow(PIN, 'Where', run.location, false, true) +
         infoRow(CAL, 'When', whenText, true) +
+        (run.series_id ? infoRow(REPEAT_ICON, 'Repeats', 'Weekly', false) : '') +
         (run.duration_minutes ? infoRow(CLOCK, 'Duration', fmtDuration(run.duration_minutes), false) : '') +
+        (cutoffText ? infoRow(CUTOFF, 'RSVP', cutoffText, false) : '') +
         (run.distance_km ? infoRow(DIST_ICON, 'Distance', fmtKm(run.distance_km), false) : '') +
+        (run.pace_seconds_per_km ? infoRow(PACE, 'Pace', fmtPace(run.pace_seconds_per_km) + ' /km', false) : '') +
         (run.type_label ? infoRow(TAG, 'Type', run.type_label, false) : '') +
-        infoRow(PEOPLE, 'Going', count + (count === 1 ? ' runner' : ' runners'), false) +
+        infoRow(PEOPLE, 'Confirmed', run.capacity != null
+          ? count + ' of ' + run.capacity + ' runners'
+          : count + (count === 1 ? ' runner' : ' runners'), false) +
       '</div>';
 
       // Kudos live on finished runs only: a full-width tap target below
@@ -1087,7 +1326,7 @@
         kudosCard =
           '<button id="kudos-btn" type="button" aria-pressed="' + (kudosOn ? 'true' : 'false') + '" class="w-full flex items-center gap-3 px-4 py-4 rounded-2xl ' +
           (kudosOn
-            ? 'bg-[#0a68e0] text-white text-[19px] font-semibold'
+            ? 'bg-[#c2410c] text-white text-[19px] font-semibold'
             : 'bg-white dark:bg-[#1c1c20] border border-[#ececf0] dark:border-[#2c2c31] text-[19px] font-medium') + '">' +
           '<svg class="shrink-0" width="22" height="22" viewBox="0 0 24 24" fill="' + (kudosOn ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-9.3-9.1C1.4 7.7 3.6 4.5 6.9 4.5c2 0 3.6 1.1 4.4 2.7.8-1.6 2.4-2.7 4.4-2.7 3.3 0 5.5 3.2 2.2 8.4C16.4 15.4 12 20 12 20z"/></svg>' +
           '<span>Kudos</span>' +
@@ -1095,7 +1334,8 @@
         '</button>';
       }
 
-      var rows = (attendees || []).map(function (a) {
+      var goingRows = (attendees || []).filter(function (a) { return a.status !== 'waitlisted'; });
+      var rows = goingRows.map(function (a) {
         var badge = a.is_organizer
           ? '<span class="px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[14px] font-semibold">Organizer</span>'
           : '';
@@ -1106,20 +1346,56 @@
         '</div>';
       }).join('');
 
+      // The waitlist, only when someone is on it: same rows as the going
+      // list, with the queue position where the Organizer badge sits.
+      var waitlistHtml = '';
+      if (waitlisted.length) {
+        var waitRows = waitlisted.map(function (a, i) {
+          var pos = i + 1;
+          var suffix = pos === 1 ? 'st' : pos === 2 ? 'nd' : pos === 3 ? 'rd' : 'th';
+          return '<div class="flex items-center gap-3 px-4 py-3.5">' +
+            avatarHtml(a.username, 'lg') +
+            '<span class="min-w-0 flex-1 text-[19px] font-medium truncate">' + esc(a.username) + '</span>' +
+            '<span class="px-2 py-0.5 rounded-md bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8] text-[14px] font-semibold">' + pos + suffix + '</span>' +
+          '</div>';
+        }).join('');
+        waitlistHtml = '<div id="waitlist">' +
+          '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">WAITLIST</h3>' +
+          '<p class="-mt-1 mb-2 px-1 text-[15px] leading-snug text-[#62626a] dark:text-[#b0b0b8]">First in line gets the next free spot.</p>' +
+          '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' + waitRows + '</div>' +
+        '</div>';
+      }
+
       var going = '<div>' +
-        '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">WHO\'S GOING</h3>' +
+        '<h3 class="mb-2 px-1 text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">CONFIRMED</h3>' +
+        '<p class="-mt-1 mb-2 px-1 text-[15px] leading-snug text-[#62626a] dark:text-[#b0b0b8]">Everyone listed tapped Join. The organizer is always counted.</p>' +
         (rows
           ? '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] divide-y divide-[#ececf0] dark:divide-[#2c2c31]">' + rows + '</div>'
-          : '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] px-4 py-8 text-center text-[17px] text-[#62626a] dark:text-[#b0b0b8]">Nobody has joined yet.</div>') +
+          : '<div class="bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] px-4 py-8 text-center text-[17px] text-[#62626a] dark:text-[#b0b0b8]">Nobody has confirmed yet.</div>') +
       '</div>';
+
+      var footnoteText;
+      if (isPast) {
+        footnoteText = 'This run has already happened.';
+      } else if (run.is_organizer) {
+        footnoteText = 'You are organizing this run. Cancel it from the menu if plans change.';
+      } else if (run.my_status === 'waitlisted') {
+        footnoteText = waitlistPos
+          ? 'You are number ' + waitlistPos + ' on the waitlist. You get a spot when someone leaves.'
+          : 'You are on the waitlist. You get a spot when someone leaves.';
+      } else if (run.joined) {
+        footnoteText = 'You are confirmed for this run. You can leave anytime.';
+      } else if (cutoffLocked(run)) {
+        footnoteText = 'RSVPs are closed. The organizer set a cutoff of ' + Number(run.rsvp_cutoff_hours) + (Number(run.rsvp_cutoff_hours) === 1 ? ' hour' : ' hours') + ' before the start.';
+      } else if (isFull) {
+        footnoteText = 'This run is full. Join the waitlist to get the next free spot.';
+      } else {
+        footnoteText = 'Tap Join to confirm you are going. You can leave anytime.';
+      }
 
       var footnote = '<p class="flex items-start gap-2 px-1 pb-2 text-[15px] leading-snug text-[#62626a] dark:text-[#b0b0b8]">' +
         '<svg class="mt-0.5 shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.1"/></svg>' +
-        (isPast
-          ? 'This run has already happened.'
-          : run.is_organizer
-            ? 'You are organizing this run. Cancel it from the menu if plans change.'
-            : 'Join to be counted as going. You can leave anytime.') + '</p>';
+        footnoteText + '</p>';
 
       // Comments sit at the very bottom of the details, under the footnote,
       // so the run's own facts stay first. The server lists the thread
@@ -1149,7 +1425,7 @@
         '</div>' +
       '</div>';
 
-      return banner + summary + facts + meeting + (isPast ? kudosCard : '') + going + footnote + commentsBlock;
+      return banner + summary + calCard + facts + meeting + (isPast ? kudosCard : '') + going + waitlistHtml + footnote + commentsBlock;
     }
 
     function renderDetail() {
@@ -1216,9 +1492,9 @@
     // Everything here is presentation: which glyph the header shows and
     // which menu the tap opens.
     var THEME_META = {
-      dark: { label: 'Dark', glyph: '<path d="M20.5 14.7A8.6 8.6 0 019.3 3.5a8.6 8.6 0 1011.2 11.2z"/>' },
-      light: { label: 'Light', glyph: '<circle cx="12" cy="12" r="4.1"/><path d="M12 2.6v2.1M12 19.3v2.1M2.6 12h2.1M19.3 12h2.1M5.3 5.3l1.5 1.5M17.2 17.2l1.5 1.5M18.7 5.3l-1.5 1.5M6.8 17.2l-1.5 1.5"/>' },
-      system: { label: 'System', glyph: '<rect x="3" y="4.3" width="18" height="12.4" rx="2.1"/><path d="M9 20.2h6"/>' },
+      dark: { label: 'Dark', menu: 'Dark', glyph: '<path d="M20.5 14.7A8.6 8.6 0 019.3 3.5a8.6 8.6 0 1011.2 11.2z"/>' },
+      light: { label: 'Light', menu: 'Light', glyph: '<circle cx="12" cy="12" r="4.1"/><path d="M12 2.6v2.1M12 19.3v2.1M2.6 12h2.1M19.3 12h2.1M5.3 5.3l1.5 1.5M17.2 17.2l1.5 1.5M18.7 5.3l-1.5 1.5M6.8 17.2l-1.5 1.5"/>' },
+      system: { label: 'System', menu: 'Same as my device', glyph: '<rect x="3" y="4.3" width="18" height="12.4" rx="2.1"/><path d="M9 20.2h6"/>' },
     };
 
     function themeSvg(mode, size) {
@@ -1269,14 +1545,14 @@
         return {
           // The kit has no checked state for a row, so the active one is
           // marked in its own label.
-          label: THEME_META[mode].label + (mode === current ? '  ✓' : ''),
+          label: THEME_META[mode].menu + (mode === current ? '  ✓' : ''),
           value: mode,
           iconEl: themeIconEl(mode),
         };
       });
       unNative.menu({
         anchorEl: anchorEl,
-        title: 'Display mode',
+        title: 'Display mode: how the app looks',
         items: items,
         cancelLabel: 'Close',
       }).then(function (choice) {
@@ -1325,6 +1601,10 @@
     var CHIP_ON = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
     var CHIP_OFF = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]';
 
+    // Same raised-neutral treatment as the distance chips above.
+    var PACE_ON = 'pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
+    var PACE_OFF = 'pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]';
+
     function renderDistFilter() {
       ['5k', '10k', 'half'].forEach(function (id) {
         var btn = document.getElementById('dist-' + id);
@@ -1334,17 +1614,34 @@
       });
     }
 
+    function renderPaceFilter() {
+      ['fast', 'steady', 'easy'].forEach(function (id) {
+        var btn = document.getElementById('pace-' + id);
+        var on = state.pace.indexOf(id) !== -1;
+        btn.className = on ? PACE_ON : PACE_OFF;
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+
+    var sheetRepeatRefresh = null; // set by the New Run sheet, see wireSheet
+
     function render() {
       renderTimeFormat();
       renderTabs();
       renderDistFilter();
+      renderPaceFilter();
       renderList();
       renderDetail();
+      // The open sheet's repeat hint carries a clock time, so it follows
+      // the format switch and any locale adoption.
+      if (sheetRepeatRefresh) sheetRepeatRefresh();
     }
 
     /* -- Time format menu (run details) ---------------------------- */
 
-    var FORMAT_LABELS = { auto: 'Auto', '12': 'AM/PM', '24': '24h' };
+    // Fixed sample times in the labels, not rendered run times, so
+    // fmtTime does not apply here.
+    var FORMAT_LABELS = { auto: 'Auto: follow my language', '12': '12 hour: 7:00 AM', '24': '24 hour: 19:00' };
     var FORMAT_ORDER = ['auto', '12', '24'];
 
     // Same shape as the Display mode menu: a titled list with the current
@@ -1357,7 +1654,7 @@
       }
       unNative.menu({
         anchorEl: anchorEl,
-        title: 'Time format',
+        title: 'Time format: how run times show',
         items: FORMAT_ORDER.map(function (value) {
           return { label: FORMAT_LABELS[value] + (value === current ? '  ✓' : ''), value: value };
         }),
@@ -1692,6 +1989,17 @@
             '<span class="' + LABEL + '">When</span>' +
             '<input id="f-when" type="datetime-local" required aria-label="Date and time" class="' + FIELD + ' text-right">' +
           '</div>' +
+          '<div id="repeat-row" class="' + ROW + ' flex-col items-stretch gap-2.5" role="group" aria-label="Repeats">' +
+            '<span class="flex items-center gap-3">' +
+              '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.64-6.36M21 3v6h-6"/></svg>' +
+              '<span class="' + LABEL + '">Repeats</span>' +
+            '</span>' +
+            '<span class="flex items-center gap-1.5 pl-[34px] flex-wrap">' +
+              '<button type="button" data-repeat="once" aria-pressed="true" class="' + REPEAT_ON + '">Once</button>' +
+              '<button type="button" data-repeat="weekly" aria-pressed="false" class="' + REPEAT_OFF + '">Weekly</button>' +
+            '</span>' +
+            '<span id="repeat-hint" class="hidden pl-[34px] text-[14px] text-[#6b6b73] dark:text-[#b0b0b8]"></span>' +
+          '</div>' +
           '<label id="meeting-row" data-map="0" class="' + ROW + ' flex-col items-stretch gap-2">' +
             '<span class="flex items-center gap-3">' +
               '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>' +
@@ -1731,6 +2039,27 @@
               '<span class="' + UNIT + '" data-unit="km">km</span>' +
             '</span>' +
           '</label>' +
+          '<label id="pace-row" class="' + ROW + '">' +
+            '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a10 10 0 100-20 10 10 0 000 20zM12 12l4-3M12 7v1"/></svg>' +
+            '<span class="' + LABEL + '">Pace</span>' +
+            '<span class="flex-1 min-w-0 flex items-center gap-2">' +
+              '<input id="f-pace" type="text" inputmode="numeric" autocomplete="off" placeholder="Optional: 6:30" class="' + FIELD + ' text-right">' +
+              '<span class="' + UNIT + '" data-unit="/km">/km</span>' +
+            '</span>' +
+          '</label>' +
+          '<label id="cutoff-row" class="' + ROW + '">' +
+            '<svg class="shrink-0 text-[#8b5cf6] dark:text-[#b494ff]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2M12 3v1M12 20v1M4.9 4.9l.7.7M18.4 18.4l.7.7"/></svg>' +
+            '<span class="' + LABEL + '">RSVP closes</span>' +
+            '<input id="f-cutoff" type="number" min="1" max="72" step="1" inputmode="numeric" autocomplete="off" placeholder="Optional: 2h before" class="' + FIELD + ' text-right">' +
+          '</label>' +
+          '<label id="capacity-row" class="' + ROW + '">' +
+            '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6 6 0 0112 0M17.5 11.5a3 3 0 100-6M18 20a5.5 5.5 0 00-2-4.3"/></svg>' +
+            '<span class="' + LABEL + '">Capacity</span>' +
+            '<span class="flex-1 min-w-0 flex items-center gap-2">' +
+              '<input id="f-capacity" type="number" min="2" max="200" step="1" inputmode="numeric" autocomplete="off" placeholder="Optional: 12" class="' + FIELD + ' text-right">' +
+              '<span class="' + UNIT + '" data-unit="runners">runners</span>' +
+            '</span>' +
+          '</label>' +
           '<button id="type-row" type="button" aria-label="Type" class="' + ROW + ' w-full text-left">' +
             '<svg class="shrink-0 text-[#62626a] dark:text-[#b0b0b8]" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01"/></svg>' +
             '<span class="' + LABEL + '">Type</span>' +
@@ -1755,7 +2084,7 @@
             '</div>' +
           '</div>' +
         '</div>' +
-        '<button id="post-run-btn" type="button" disabled class="mt-5 w-full h-[58px] rounded-2xl bg-[#0a68e0] text-white text-[19px] font-semibold disabled:opacity-40">Post run</button>';
+        '<button id="post-run-btn" type="button" disabled class="mt-5 w-full h-[58px] rounded-2xl bg-[#c2410c] text-white text-[19px] font-semibold disabled:opacity-40">Post run</button>';
 
       return wrap;
     }
@@ -1811,7 +2140,9 @@
       var where = contentEl.querySelector('#f-where');
       var when = contentEl.querySelector('#f-when');
       var duration = contentEl.querySelector('#f-duration');
+      var cutoff = contentEl.querySelector('#f-cutoff');
       var distance = contentEl.querySelector('#f-distance');
+      var pace = contentEl.querySelector('#f-pace');
       var note = contentEl.querySelector('#f-note');
       var meetingRow = contentEl.querySelector('#meeting-row');
       var meetingInput = contentEl.querySelector('#f-meeting');
@@ -1822,6 +2153,9 @@
       var planValueEl = contentEl.querySelector('#plan-value');
       var planHintEl = contentEl.querySelector('#plan-hint');
       var planChips = Array.prototype.slice.call(contentEl.querySelectorAll('.plan-chip'));
+      var capacityInput = contentEl.querySelector('#f-capacity');
+      var repeatHintEl = contentEl.querySelector('#repeat-hint');
+      var repeatChips = Array.prototype.slice.call(contentEl.querySelectorAll('[data-repeat]'));
       var post = contentEl.querySelector('#post-run-btn');
       var typeRow = contentEl.querySelector('#type-row');
       var typeValueEl = contentEl.querySelector('#type-value');
@@ -1829,6 +2163,10 @@
       var meetingPin = null; // { lat, lng } once the geocoder has answered
       var meetingSeq = 0;
       var meetingTimer = null;
+      var weeklyRepeat = false;
+      // setFormat and a locale change re-render everything; the repeat
+      // hint's clock time must follow, so render() reaches in here.
+      sheetRepeatRefresh = renderRepeatHint;
 
       // The preset picker: choosing a plan fills the distance field and
       // shows that plan's weekly mileage as a hint. Tapping the active
@@ -1881,6 +2219,41 @@
       // A hand-edited distance stays whatever the runner typed: the field
       // is the source of truth, the preset only ever writes into it.
       distance.addEventListener('input', clearPlan);
+
+      // The Repeats row: Once (the default) or Weekly. Weekly shows the
+      // weekday and time the series will repeat at, kept in step with the
+      // When row and the clock-format switch.
+      function renderRepeatHint() {
+        if (!weeklyRepeat || !repeatHintEl) {
+          if (repeatHintEl) repeatHintEl.classList.add('hidden');
+          return;
+        }
+        var d = parseWhen(when.value);
+        if (!d) { repeatHintEl.classList.add('hidden'); return; }
+        var dayName = '';
+        try { dayName = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(d); }
+        catch (err) { dayName = ''; }
+        repeatHintEl.innerHTML = 'Every ' + (dayName ? esc(dayName) + ' ' : '') + 'week at ' +
+          '<span class="run-time">' + esc(fmtTime(d)) + '</span>';
+        repeatHintEl.classList.remove('hidden');
+      }
+
+      function setRepeat(value) {
+        weeklyRepeat = value === 'weekly';
+        repeatChips.forEach(function (btn) {
+          var on = btn.getAttribute('data-repeat') === (weeklyRepeat ? 'weekly' : 'once');
+          btn.className = on ? REPEAT_ON : REPEAT_OFF;
+          btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        renderRepeatHint();
+      }
+
+      repeatChips.forEach(function (btn) {
+        btn.addEventListener('click', function () { setRepeat(btn.getAttribute('data-repeat')); });
+      });
+      when.addEventListener('input', renderRepeatHint);
+      when.addEventListener('change', renderRepeatHint);
+      setRepeat('once');
 
       // Every state change lands here: what the hint says, whether the
       // thumbnail shows, and what data-map advertises to the checks.
@@ -1984,9 +2357,9 @@
           anchorEl: typeRow,
           title: own.label,
           items: [
-            { label: 'Use', value: 'use' },
+            { label: 'Use this type', value: 'use' },
             { label: 'Rename', value: 'rename' },
-            { label: 'Delete', destructive: true, value: 'delete' },
+            { label: 'Delete type', destructive: true, value: 'delete' },
           ],
           cancelLabel: 'Cancel',
         }).then(function (choice) {
@@ -2023,15 +2396,15 @@
       function openTypePicker() {
         if (!(window.unNative && unNative.menu)) return;
         var items = PRESET_TYPES.map(function (name) {
-          return { label: name + (typeValue === name ? '  ✓' : ''), value: 'pick|' + name };
+          return { label: name + ': ' + PRESET_HINTS[name] + (typeValue === name ? '  ✓' : ''), value: 'pick|' + name };
         });
         state.customTypes.forEach(function (t) {
           items.push({ label: t.label + (typeValue === t.label ? '  ✓' : ''), value: 'own|' + t.id });
         });
-        items.push({ label: 'Add type', value: 'add' });
+        items.push({ label: 'Add your own type', value: 'add' });
         unNative.menu({
           anchorEl: typeRow,
-          title: 'Type',
+          title: 'Run type: pick the kind of run',
           items: items,
           cancelLabel: 'Cancel',
         }).then(function (choice) {
@@ -2138,6 +2511,20 @@
         if (distance.value.trim() !== '') {
           distanceKm = distance.value.trim();
         }
+        // Optional planned pace in "m:ss" per kilometre. Blank means "not
+        // set"; anything else goes to the server as-is and the server owns
+        // validation, so the toast carries its message.
+        var paceStr = null;
+        if (pace.value.trim() !== '') {
+          paceStr = pace.value.trim();
+        }
+        // Optional capacity and the weekly choice: blank/Once mean "not
+        // set", anything else goes to the server as-is and the server
+        // owns validation, so the toast carries its message.
+        var capacityVal = capacityInput.value.trim();
+        var deviceTz;
+        try { deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone; }
+        catch (err) { deviceTz = ''; }
         post.disabled = true;
         post.textContent = 'Posting...';
         api('/api/runs', {
@@ -2151,7 +2538,12 @@
             meeting_lat: meetingPin ? meetingPin.lat : undefined,
             meeting_lng: meetingPin ? meetingPin.lng : undefined,
             duration_minutes: durationMinutes === null ? undefined : durationMinutes,
+            rsvp_cutoff_hours: cutoff.value.trim() === '' ? undefined : cutoff.value.trim(),
+            capacity: capacityVal === '' ? undefined : capacityVal,
+            repeats: weeklyRepeat ? 'weekly' : undefined,
+            timezone: weeklyRepeat && deviceTz ? deviceTz : undefined,
             distance_km: distanceKm === null ? undefined : distanceKm,
+            pace: paceStr === null ? undefined : paceStr,
             photo_url: photo ? photo.url : undefined,
             photo_file_id: photo ? photo.id : undefined,
           }),
@@ -2170,6 +2562,238 @@
       });
 
       where.focus({ preventScroll: true });
+    }
+
+    /* ── Add to calendar (.ics export) ─────────────────────────────── */
+
+    // The export is client-side only: a standards-compliant VCALENDAR
+    // built from the run the screen already holds, saved with a Blob
+    // download. The sheet asks how long the event should block (30, 60
+    // or 90 minutes, 60 picked for you) before anything is written, and
+    // Cancel closes it without saving a file.
+
+    var CAL_DURATIONS = [30, 60, 90];
+
+    // Whole-literal chip states, same rule as the day and time picks: the
+    // picked duration lifts as a raised neutral surface, never a blue tint.
+    var CAL_CHIP_BASE = 'shrink-0 px-3.5 py-2 rounded-full text-[15px] font-semibold ';
+    var CAL_CHIP_ON = CAL_CHIP_BASE + 'bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
+    var CAL_CHIP_OFF = CAL_CHIP_BASE + 'bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#6b6b73] dark:text-[#b0b0b8]';
+
+    // RFC 5545 TEXT escaping: backslash first, then ; , and newlines.
+    function icsEscape(value) {
+      return String(value == null ? '' : value)
+        .replace(/\\/g, '\\\\')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,')
+        .replace(/\r?\n/g, '\\n');
+    }
+
+    function icsStamp(d) {
+      return d.getUTCFullYear() + pad2(d.getUTCMonth() + 1) + pad2(d.getUTCDate()) +
+        'T' + pad2(d.getUTCHours()) + pad2(d.getUTCMinutes()) + pad2(d.getUTCSeconds()) + 'Z';
+    }
+
+    // The run's own day as the viewer sees it, for the file name. Local
+    // date parts, never UTC ones: the run happens on the day the member
+    // would circle on their own calendar.
+    function calDateStr(run) {
+      var d = new Date(run.starts_at);
+      return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+    }
+
+    function icsFilename(run) {
+      return 'run-' + calDateStr(run) + '.ics';
+    }
+
+    // RFC 5545 folding: no content line may exceed 75 octets, so long
+    // lines continue with a single leading space, which parsers strip on
+    // read. Export lines here are ASCII-heavy, so folding by character
+    // keeps every line within the limit in practice.
+    function icsFold(line) {
+      if (line.length <= 75) return line;
+      var out = line.slice(0, 75);
+      var rest = line.slice(75);
+      while (rest.length) {
+        out += '\r\n ' + rest.slice(0, 74);
+        rest = rest.slice(74);
+      }
+      return out;
+    }
+
+    // The same tokenless deep link the share sheet builds: origin +
+    // pathname drops ?token=, and the server lands a visitor on #run/<id>.
+    function runLink(run) {
+      return location.origin + location.pathname + '#run/' + run.id;
+    }
+
+    function buildIcs(run, minutes) {
+      var start = new Date(run.starts_at);
+      var end = new Date(start.getTime() + minutes * 60000);
+      var stamp = new Date();
+      var desc = [];
+      if (run.note) desc.push(icsEscape(run.note));
+      if (run.meeting_point) desc.push('Meeting point: ' + icsEscape(run.meeting_point));
+      desc.push('Details: ' + runLink(run));
+      var lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Run Club//Run export 1.0//EN',
+        'CALSCALE:GREGORIAN',
+        'BEGIN:VEVENT',
+        'UID:run-' + run.id + '-' + stamp.getTime() + '@run-club',
+        'DTSTAMP:' + icsStamp(stamp),
+        'DTSTART:' + icsStamp(start),
+        'DTEND:' + icsStamp(end),
+        'SUMMARY:' + icsEscape(run.location),
+        'LOCATION:' + icsEscape(run.meeting_point
+          ? run.location + ', ' + run.meeting_point
+          : run.location),
+        'DESCRIPTION:' + desc.join('\\n'),
+        'URL:' + runLink(run),
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ];
+      return lines.map(icsFold).join('\r\n') + '\r\n';
+    }
+
+    function downloadIcs(run, minutes) {
+      var blob = new Blob([buildIcs(run, minutes)], { type: 'text/calendar;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = icsFilename(run);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Give the browser a beat to start the download before releasing
+      // the blob; revoking too early can cancel it on some WebViews.
+      setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+    }
+
+    // ?cal=ics renders the file the download would produce, in place,
+    // without saving anything: the automated checks (and a curious
+    // reviewer) can read the DTSTART, LOCATION, SUMMARY and URL lines and
+    // the file name without a real download firing. ?dur= picks the
+    // duration, 60 by default. Same single-load rules as ?tf= and ?plan=:
+    // pure view state, nothing persisted, nothing written.
+    function renderCalFile(run, minutes) {
+      var name = icsFilename(run);
+      var dateStr = calDateStr(run);
+      var old = document.getElementById('cal-file');
+      if (old) old.remove();
+      var wrap = document.createElement('div');
+      wrap.id = 'cal-file';
+      wrap.className = 'bg-white dark:bg-[#1c1c20] rounded-2xl border border-[#ececf0] dark:border-[#2c2c31] p-4';
+      wrap.setAttribute('data-cal-file', '1');
+      wrap.setAttribute('data-filename', name);
+      wrap.setAttribute('data-run-date', dateStr);
+      wrap.setAttribute('data-cal-dur', String(minutes));
+      wrap.innerHTML =
+        '<h3 class="text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">CALENDAR FILE</h3>' +
+        '<p class="mt-1 text-[15px] leading-snug text-[#62626a] dark:text-[#b0b0b8]">File name: ' + esc(name) +
+          ' · Run date: ' + esc(dateStr) + ' · ' + minutes + ' min</p>' +
+        '<pre class="mt-3 overflow-x-auto text-[12px] leading-snug text-[#111114] dark:text-[#f2f2f7] whitespace-pre-wrap break-all">' + esc(buildIcs(run, minutes)) + '</pre>';
+      detailBodyEl.appendChild(wrap);
+    }
+
+    function buildCalSheet(run) {
+      var wrap = document.createElement('div');
+      wrap.id = 'cal-sheet';
+      wrap.className = 'pb-1';
+      wrap.setAttribute('data-cal-open', '1');
+      var when = new Date(run.starts_at);
+      var chips = CAL_DURATIONS.map(function (m) {
+        var on = m === 60;
+        return '<button type="button" data-cal-dur="' + m + '" aria-pressed="' + (on ? 'true' : 'false') +
+          '" class="' + (on ? CAL_CHIP_ON : CAL_CHIP_OFF) + '">' + m + ' min</button>';
+      }).join('');
+      wrap.innerHTML =
+        '<div class="flex items-center justify-between gap-3">' +
+          '<h2 class="text-[30px] font-extrabold tracking-tight">Add to calendar</h2>' +
+          '<button id="cal-sheet-close" type="button" aria-label="Close" class="un-touch-target shrink-0 w-9 h-9 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] flex items-center justify-center">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
+          '</button>' +
+        '</div>' +
+        '<p class="mt-2 text-[17px] text-[#62626a] dark:text-[#b0b0b8]">' + esc(run.location) +
+          ' · <span class="run-time">' + esc(fmtTime(when)) + '</span></p>' +
+        '<p class="mt-5 text-[15px] font-medium text-[#62626a] dark:text-[#b0b0b8]">Event length</p>' +
+        '<div class="mt-2 flex items-center gap-1.5" role="group" aria-label="Event duration">' + chips + '</div>' +
+        '<button id="cal-download-btn" type="button" class="mt-5 w-full h-[58px] rounded-2xl bg-[#0a68e0] text-white text-[19px] font-semibold">Download calendar file</button>' +
+        '<button id="cal-cancel-btn" type="button" class="mt-2 w-full h-[52px] rounded-2xl text-[19px] font-semibold text-[#62626a] dark:text-[#b0b0b8]">Cancel</button>';
+      return wrap;
+    }
+
+    function openCalSheet(run) {
+      if (state.calSheet) return;
+      var dur = 60;
+      var contentEl = buildCalSheet(run);
+      var handle = null;
+      var overlay = null;
+
+      function setDur(next) {
+        dur = next;
+        contentEl.querySelectorAll('[data-cal-dur]').forEach(function (btn) {
+          var on = Number(btn.getAttribute('data-cal-dur')) === dur;
+          btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+          btn.className = on ? CAL_CHIP_ON : CAL_CHIP_OFF;
+        });
+      }
+      contentEl.querySelectorAll('[data-cal-dur]').forEach(function (btn) {
+        btn.addEventListener('click', function () { setDur(Number(btn.getAttribute('data-cal-dur'))); });
+      });
+      contentEl.querySelector('#cal-download-btn').addEventListener('click', function () {
+        downloadIcs(run, dur);
+        closeCalSheet();
+        notify('Calendar file downloaded.');
+      });
+      contentEl.querySelector('#cal-cancel-btn').addEventListener('click', cancelCalSheet);
+      contentEl.querySelector('#cal-sheet-close').addEventListener('click', cancelCalSheet);
+
+      if (window.unNative && unNative.presentSheet) {
+        handle = unNative.presentSheet({
+          contentEl: contentEl,
+          onDismiss: function () { state.calSheet = null; },
+        });
+      } else {
+        // No hosted kit (local dev without the platform shell): mount the
+        // same content as a simple bottom panel so the export still works.
+        overlay = document.createElement('div');
+        overlay.className = 'fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-4';
+        overlay.appendChild(contentEl);
+        document.getElementById('app').appendChild(overlay);
+      }
+      state.calSheet = { handle: handle, overlay: overlay };
+    }
+
+    function closeCalSheet() {
+      var s = state.calSheet;
+      if (!s) return;
+      if (s.handle) s.handle.dismiss(); // onDismiss clears the state
+      else if (s.overlay) { s.overlay.remove(); state.calSheet = null; }
+    }
+
+    // Cancel: close the sheet and stop there. Nothing is downloaded. The
+    // marker on #app records the outcome so a check can assert it.
+    function cancelCalSheet() {
+      closeCalSheet();
+      document.getElementById('app').setAttribute('data-cal-cancelled', '1');
+    }
+
+    // ?cal= deep links, the same single-load view-state hooks as ?tf= and
+    // ?plan=: 'sheet' opens the duration sheet on the hashed run, 'cancel'
+    // opens it and then runs the very handler the sheet's Cancel button
+    // uses, and 'ics' renders the file the download would produce.
+    function applyCalMode(run) {
+      var mode = params.get('cal');
+      if (mode === 'sheet') { openCalSheet(run); return; }
+      if (mode === 'cancel') {
+        openCalSheet(run);
+        // One beat so the sheet is up before the cancel handler closes it.
+        setTimeout(cancelCalSheet, 120);
+        return;
+      }
+      if (mode === 'ics') renderCalFile(run, Math.max(1, Number(params.get('dur')) || 60));
     }
 
     /* ── Actions ───────────────────────────────────────────────────── */
@@ -2203,6 +2827,12 @@
       return api('/api/runs/' + id + '/join', { method: 'POST' });
     }
 
+    // The locked-join server answer, matched on words rather than status
+    // codes so it keeps working if the response shape grows fields.
+    function isCutoffError(err) {
+      return /RSVPs are closed/i.test(err && err.message);
+    }
+
     function leaveRun(id) {
       return api('/api/runs/' + id + '/leave', { method: 'POST' });
     }
@@ -2216,6 +2846,10 @@
     }
 
     listEl.addEventListener('click', function (e) {
+      if (e.target.closest('#retry-runs')) {
+        loadRuns();
+        return;
+      }
       var kudosBtn = e.target.closest('.kudos-btn');
       if (kudosBtn) {
         // Same rule as the join buttons: stop the tap so it does not also
@@ -2244,8 +2878,25 @@
         if (join.dataset.joined === '1') return;
         join.disabled = true;
         joinRun(parseInt(join.dataset.id, 10))
-          .then(function () { return loadRuns(); })
+          .then(function (res) {
+            return loadRuns().then(function () {
+              // The board has no success toast on a plain join; the
+              // waitlist is new information, so it gets one.
+              if (res && res.status === 'waitlisted') notify('You are on the waitlist.');
+            });
+          })
           .catch(function (err) { join.disabled = false; notify(err.message); });
+        return;
+      }
+      var calCardBtn = e.target.closest('.cal-card-btn');
+      if (calCardBtn) {
+        // Same rule as join and kudos: the card underneath is itself a
+        // button, so stop the tap before it also navigates.
+        e.stopPropagation();
+        var calRun = state.runs.find(function (r) {
+          return r.id === parseInt(calCardBtn.dataset.id, 10);
+        });
+        if (calRun) openCalSheet(calRun);
         return;
       }
       var card = e.target.closest('.run-card');
@@ -2259,6 +2910,10 @@
     });
 
     detailBodyEl.addEventListener('click', function (e) {
+      if (e.target.closest('#cal-detail-btn') && state.detail) {
+        openCalSheet(state.detail.run);
+        return;
+      }
       var kudosBtn = e.target.closest('#kudos-btn');
       if (kudosBtn && state.detail) {
         kudosBtn.disabled = true;
@@ -2276,39 +2931,66 @@
       if (!btn || !state.detail) return;
       var id = state.detail.run.id;
       var leaving = btn.dataset.action === 'leave';
+      var wasWaitlisted = state.detail.run.my_status === 'waitlisted';
       btn.disabled = true;
       (leaving ? leaveRun(id) : joinRun(id))
-        .then(function () { return refreshBoth(id); })
-        .then(function () { notify(leaving ? 'You left this run.' : 'You are going.'); })
-        .catch(function (err) { btn.disabled = false; notify(err.message); });
+        .then(function (res) { return refreshBoth(id).then(function () { return res; }); })
+        .then(function (res) {
+          notify(leaving
+            ? (wasWaitlisted ? 'You left the waitlist.' : 'You left this run.')
+            : (res && res.status === 'waitlisted' ? 'You are on the waitlist.' : 'You are going.'));
+        })
+        .catch(function (err) {
+          if (isCutoffError(err)) {
+            // The window moved on while the screen was open. Re-render
+            // from the server so the lock is visible, then tell the member.
+            return loadDetail(id)
+              .then(renderDetail)
+              .catch(function () { /* keep the stale screen */ })
+              .then(function () { notify(err.message); });
+          }
+          btn.disabled = false;
+          notify(err.message);
+        });
     });
 
     document.getElementById('more-btn').addEventListener('click', function (e) {
       if (!state.detail) return;
       var run = state.detail.run;
       var isPast = new Date(run.starts_at).getTime() < Date.now();
-    var items = [];
+      var wasWaitlisted = run.my_status === 'waitlisted';
+      var items = [];
       // Share first: it is relevant to every viewer, while the entries
       // below it only exist in some states.
-      items.push({ label: 'Share', value: 'share' });
+      items.push({ label: 'Share run', value: 'share' });
       // Reminder toggle: only for attendees of a run that has not
       // started, so the menu stays exactly as short as it is today for
-      // everyone else. The label is the action the tap performs.
-      if (!isPast && run.joined) {
+      // everyone else. A waitlisted member gets no reminder until they
+      // have a spot, so the choice is hidden from them.
+      if (!isPast && run.joined && !wasWaitlisted) {
         items.push({
-          label: run.reminders_off ? 'Reminders on' : 'Reminders off',
+          label: run.reminders_off ? 'Turn reminders on' : 'Turn reminders off',
           value: 'reminders',
         });
       }
       if (!isPast && run.is_organizer) {
         items.push({ label: 'Cancel run', destructive: true, value: 'cancel', icon: 'trash' });
+        // Only a weekly run can be stopped; Cancel run still lifts just
+        // this week.
+        if (run.series_id) {
+          items.push({ label: 'Stop weekly run', destructive: true, value: 'endseries' });
+        }
       } else if (!isPast && run.joined) {
-        items.push({ label: 'Leave run', destructive: true, value: 'leave' });
+        items.push({
+          label: wasWaitlisted ? 'Leave waitlist' : 'Leave run',
+          destructive: true,
+          value: 'leave',
+        });
       }
       // The detail screen shows a time but has no room for the segmented
       // control, so the same choice lives here, one level down.
-      items.push({ label: 'Time format', value: 'timeformat' });
-      unNative.menu({ anchorEl: e.currentTarget, items: items, cancelLabel: 'Cancel' })
+      items.push({ label: 'Change time format', value: 'timeformat' });
+      unNative.menu({ anchorEl: e.currentTarget, title: 'Run options', items: items, cancelLabel: 'Cancel' })
         .then(function (choice) {
           if (!choice) return;
           if (choice.value === 'timeformat') {
@@ -2343,7 +3025,26 @@
           if (choice.value === 'leave') {
             return leaveRun(run.id)
               .then(function () { return refreshBoth(run.id); })
-              .then(function () { notify('You left this run.'); });
+              .then(function () { notify(wasWaitlisted ? 'You left the waitlist.' : 'You left this run.'); });
+          }
+          if (choice.value === 'endseries') {
+            return unNative.alert({
+              title: 'Stop this weekly run?',
+              message: 'This week and every week after it will be cancelled. Past weeks stay.',
+              buttons: [
+                { label: 'Keep it', style: 'cancel' },
+                { label: 'Stop weekly run', style: 'destructive' },
+              ],
+            }).then(function (res) {
+              if (!res || !res.button || res.button.style !== 'destructive') return;
+              return api('/api/runs/' + run.id + '?series=end', { method: 'DELETE' })
+                .then(function () {
+                  state.detail = null;
+                  setHash('');
+                  return loadRuns();
+                })
+                .then(function () { notify('Weekly run stopped.'); });
+            });
           }
           return unNative.alert({
             title: 'Cancel this run?',
@@ -2356,8 +3057,10 @@
             if (!res || !res.button || res.button.style !== 'destructive') return;
             // Best-effort: an orphaned upload just sits against the app's
             // quota, which is a smaller problem than a cancel that fails
-            // because the storage call did.
-            var cleanup = (run.photo_file_id && window.usernode && usernode.deleteFile)
+            // because the storage call did. A weekly run's photo is
+            // shared by every week, so cancelling one week or stopping
+            // the series keeps the file.
+            var cleanup = (!run.series_id && run.photo_file_id && window.usernode && usernode.deleteFile)
               ? usernode.deleteFile(run.photo_file_id).catch(function () {})
               : Promise.resolve();
             return cleanup
@@ -2423,6 +3126,18 @@
       });
     });
 
+    // Pace chips behave exactly like the distance chips above: multi-
+    // select, toggle on tap, no refetch.
+    ['fast', 'steady', 'easy'].forEach(function (id) {
+      document.getElementById('pace-' + id).addEventListener('click', function () {
+        var at = state.pace.indexOf(id);
+        if (at === -1) state.pace.push(id);
+        else state.pace.splice(at, 1);
+        renderPaceFilter();
+        renderList();
+      });
+    });
+
     /* ── Routing: #new and #run/<id> are the deep links ────────────── */
 
     var suppressHash = false;
@@ -2439,6 +3154,10 @@
 
     function route() {
       if (suppressHash) return;
+      // Leaving a screen closes the export sheet, the same way the New
+      // Run sheet is dismissed below; applyCalMode opens it afresh after
+      // the detail load, so this never fights the deep links.
+      if (state.calSheet) closeCalSheet();
       var h = (location.hash || '').replace(/^#/, '');
       var run = h.match(/^run\/(\d+)$/);
 
@@ -2449,6 +3168,7 @@
         loadDetail(id).then(function () {
           renderDetail();
           showScreen('detail', already ? 'none' : 'push');
+          applyCalMode(state.detail.run);
         }).catch(function (err) {
           notify(err.message);
           setHash('');
@@ -2506,6 +3226,16 @@
       state.dist = linked.split(',').filter(function (id) { return !!DIST_FILTERS[id]; });
     })();
 
+    // A pace deep link for reviewers: ?pace=fast,steady pre-activates
+    // those pace chips for a single load. Same view-state rules as
+    // ?dist= above: no database write, never persisted.
+    (function resolvePace() {
+      var linked = (params.get('pace') || '').toLowerCase();
+      if (!linked) return;
+      state.pace = linked.split(',').map(function (s) { return s.trim(); })
+        .filter(function (id) { return !!PACE_FILTERS[id]; });
+    })();
+
     // A plan deep link for reviewers: the query param pre-selects a
     // training plan preset when the New Run sheet opens. Same single-load
     // rules as ?dist= above: nothing persisted, nothing written, and the
@@ -2517,6 +3247,7 @@
     renderTimeFormat();
     renderTabs();
     renderDistFilter();
+    renderPaceFilter();
     loadRunTypes();
     loadRuns().then(route);
 
