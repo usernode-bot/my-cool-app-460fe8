@@ -413,7 +413,7 @@
     // Preset run types. Keep in sync with PRESET_TYPES in server.js: the
     // server is authoritative for validation, this list drives the picker,
     // and a label is only valid if BOTH sides know it.
-    var PRESET_TYPES = ['Easy', 'Tempo', 'Long Run', 'Intervals', 'Race'];
+    var PRESET_TYPES = ['Easy', 'Tempo', 'Long Run', 'Intervals', 'Race', 'Mountain Run'];
     // One-line descriptions for the type picker menu, keyed by preset
     // name. Menu rows carry a single line, so the hint rides in the label.
     var PRESET_HINTS = {
@@ -422,6 +422,7 @@
       'Long Run': 'more distance, slower pace',
       'Intervals': 'fast repeats with rests',
       'Race': 'an event or time trial',
+      'Mountain Run': 'hills, trails and climbs',
     };
 
     /* ── Meeting-point pin: static map thumbnail ───────────────────── */

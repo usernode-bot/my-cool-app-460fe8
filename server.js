@@ -1,5 +1,7 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
+const { execFileSync } = require('child_process');
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
 
@@ -127,7 +129,7 @@ const MAX_PACE_SECONDS = 12 * 60;
 // Preset run types. Keep in sync with PRESET_TYPES in public/index.html:
 // the server is authoritative for validation, the frontend list drives the
 // picker, and a label is only valid if BOTH sides know it.
-const PRESET_TYPES = ['Easy', 'Tempo', 'Long Run', 'Intervals', 'Race'];
+const PRESET_TYPES = ['Easy', 'Tempo', 'Long Run', 'Intervals', 'Race', 'Mountain Run'];
 const MAX_TYPE_LABEL = 30;
 // The meeting point is optional. The name/description is free text, the
 // coordinates are a resolved pin for the static map thumbnail. Both are
@@ -1642,7 +1644,27 @@ async function migrate() {
 
 let server;
 
+// The image build compiles the stylesheet (Dockerfile stage 1) and copies it
+// into the image, so production always has it. A checkout booted straight
+// from source (the platform's check runner, a local run) has no compiled
+// file, and the page would load unstyled and log a MIME error. Build it once
+// at startup when it is missing, with the same config the image uses.
+function ensureStylesheet() {
+  const out = path.join(__dirname, 'public', 'tailwind.css');
+  if (fs.existsSync(out)) return;
+  try {
+    execFileSync(
+      path.join(__dirname, 'node_modules', '.bin', 'tailwindcss'),
+      ['-c', 'tailwind.config.js', '-i', 'styles/tailwind-input.css', '-o', out, '--minify'],
+      { cwd: __dirname, stdio: 'inherit' }
+    );
+  } catch (err) {
+    console.error('tailwind.css is missing and could not be built:', err.message);
+  }
+}
+
 async function start() {
+  ensureStylesheet();
   await migrate();
 
   // Staging starts from a copy of production, where these tables are brand
