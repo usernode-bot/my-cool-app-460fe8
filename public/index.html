@@ -321,6 +321,16 @@
         </div>
       </header>
 
+      <!-- The club's distance for this week. A reading, not a control:
+           nothing here is tappable. Hidden until a board load answers, and
+           hidden again if the board fails, so it never shows a wrong
+           number. -->
+      <div id="week-total" class="hidden mt-5 bg-white dark:bg-[#1c1c20] rounded-2xl px-4 py-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+        <p class="text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">THIS WEEK</p>
+        <p id="week-km" class="mt-1 text-[28px] font-extrabold tracking-tight leading-tight"></p>
+        <p id="week-sub" class="text-[15px] text-[#62626a] dark:text-[#b0b0b8]"></p>
+      </div>
+
       <div class="mt-5 grid grid-cols-2 gap-1 p-1 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[14px]">
         <button id="tab-upcoming" type="button" data-tab="upcoming"
           class="rounded-[11px] py-2 text-[16px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]">Upcoming</button>
@@ -504,6 +514,7 @@
       // same way ?tf= seeds the format switch. Never persisted.
       q: (params.get('q') || '').trim(),
       runs: [],
+      week: null,        // { distance_km, run_count } for the club's week, null until a load answers
       loading: false,    // first load in flight: the list shows skeleton cards
       loadError: false,  // the last load failed: the list shows a retry row
       customTypes: [],   // the signed-in member's own types, from /api/run-types
@@ -1151,20 +1162,63 @@
         state.tab === 'past' ? TAB_ON : TAB_OFF;
     }
 
+    // The week card's value classes, whole literals so the build-time
+    // extractor keeps them: a total in the app's text colour, a quiet zero
+    // in the same grey as the label.
+    var WEEK_VALUE_ON = 'mt-1 text-[28px] font-extrabold tracking-tight leading-tight';
+    var WEEK_VALUE_ZERO = 'mt-1 text-[28px] font-extrabold tracking-tight leading-tight text-[#62626a] dark:text-[#b0b0b8]';
+
+    function renderWeek() {
+      var card = document.getElementById('week-total');
+      if (!card) return;
+      if (!state.week) {
+        card.classList.add('hidden');
+        return;
+      }
+      var km = Number(state.week.distance_km) || 0;
+      var count = Number(state.week.run_count) || 0;
+      var valueEl = document.getElementById('week-km');
+      var subEl = document.getElementById('week-sub');
+      if (km > 0) {
+        valueEl.className = WEEK_VALUE_ON;
+        valueEl.textContent = fmtKm(km);
+        subEl.textContent = 'Across ' + count + (count === 1 ? ' run' : ' runs');
+      } else {
+        // fmtKm answers '' for zero, and "0 km" is the honest reading here.
+        valueEl.className = WEEK_VALUE_ZERO;
+        valueEl.textContent = '0 km';
+        subEl.textContent = 'No runs with a distance yet this week.';
+      }
+      card.classList.remove('hidden');
+    }
+
     function loadRuns() {
+      // The week total is counted in the viewer's own zone, so the board
+      // load says which one; a device that will not say falls back to UTC
+      // on the server rather than failing the request.
+      var deviceTz;
+      try { deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone; }
+      catch (err) { deviceTz = ''; }
       var qs = 'filter=' + state.tab +
-        (state.q ? '&q=' + encodeURIComponent(state.q) : '');
+        (state.q ? '&q=' + encodeURIComponent(state.q) : '') +
+        (deviceTz ? '&tz=' + encodeURIComponent(deviceTz) : '');
       state.loading = true;
       state.loadError = false;
       renderList();
       return api('/api/runs?' + qs).then(function (data) {
         state.runs = data.runs || [];
+        state.week = data.week || null;
         state.loading = false;
         renderList();
+        renderWeek();
       }).catch(function (err) {
         state.loading = false;
         state.loadError = true;
+        // No answer means no trustworthy total: hide the card rather than
+        // leave a stale number next to a failed board.
+        state.week = null;
         renderList();
+        renderWeek();
       });
     }
 

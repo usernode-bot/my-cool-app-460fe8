@@ -485,6 +485,14 @@ app.get('/api/runs', async (req, res) => {
   // literally rather than acting as wildcards.
   const like = q ? '%' + q.replace(/[\\%_]/g, '\\$&') + '%' : '';
   const params = [callerId(req), like];
+  // The club's total for this week, alongside the list but independent of
+  // the tab and the search: it is about the board as a whole. The week is
+  // Monday 00:00 to Sunday, in the viewer's own zone, and date_trunc on the
+  // local wall time (then back with AT TIME ZONE) gives the instant local
+  // Monday began. The zone is only ever a bound parameter. A run counts
+  // once at its planned distance, whatever attendance is, and only once it
+  // has started; rows with no distance are left out of both figures.
+  const tz = validTimezone(req.query.tz) ? String(req.query.tz) : 'UTC';
   const memberMatch = `
     EXISTS (
       SELECT 1 FROM run_attendees m
@@ -500,7 +508,23 @@ app.get('/api/runs', async (req, res) => {
             ` ORDER BY r.starts_at ASC LIMIT 100`),
       params
     );
-    res.json({ runs: rows });
+    const weekQuery = await pool.query(
+      `SELECT COALESCE(SUM(r.distance_km), 0)::float AS distance_km,
+              COUNT(*)::int AS run_count
+       FROM runs r
+       WHERE r.distance_km IS NOT NULL
+         AND r.starts_at >= (date_trunc('week', NOW() AT TIME ZONE $1) AT TIME ZONE $1)
+         AND r.starts_at < NOW()`,
+      [tz]
+    );
+    const weekRow = weekQuery.rows[0] || { distance_km: 0, run_count: 0 };
+    res.json({
+      runs: rows,
+      week: {
+        distance_km: Math.round(Number(weekRow.distance_km) * 10) / 10,
+        run_count: Number(weekRow.run_count),
+      },
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1259,6 +1283,20 @@ const SEED_RUNS = [
     minute: 0,
     organizer: [-903, 'staging-demo-nina'],
     joiners: [[-901, 'staging-demo-maya'], [-902, 'staging-demo-ethan']],
+  },
+  {
+    id: 900008,
+    location: 'Staging demo: Evening loop',
+    note: 'staging seed: a run that already started this week',
+    type: null,
+    // Boot-relative and already started, so a fresh staging database has a
+    // finished run with a distance for the week total card to count.
+    inHours: -2,
+    distance: 8,
+    pace: 360,
+    duration: 45,
+    organizer: [-901, 'staging-demo-maya'],
+    joiners: [[-902, 'staging-demo-ethan']],
   },
   {
     id: 900004,

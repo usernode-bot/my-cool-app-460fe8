@@ -9,6 +9,13 @@
       "expectText": "Staging demo: Riverside Park"
     },
     {
+      "id": "home.weekTotal",
+      "name": "Home shows the club's distance this week",
+      "path": "/",
+      "expectSelector": "#week-total:not(.hidden) #week-km",
+      "expectText": "Across"
+    },
+    {
       "name": "New Run sheet shows the RSVP cutoff row",
       "path": "/#new",
       "expectSelector": "#cutoff-row"
