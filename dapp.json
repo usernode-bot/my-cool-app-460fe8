@@ -64,6 +64,11 @@
       "expectSelector": "#type-row"
     },
     {
+      "name": "Type picker offers Mountain Run",
+      "path": "/?type=menu#new",
+      "expectText": "Mountain Run: hills, trails and climbs"
+    },
+    {
       "name": "New Run sheet shows the Duration row",
       "path": "/#new",
       "expectSelector": "#duration-row"

@@ -127,7 +127,7 @@ const MAX_PACE_SECONDS = 12 * 60;
 // Preset run types. Keep in sync with PRESET_TYPES in public/index.html:
 // the server is authoritative for validation, the frontend list drives the
 // picker, and a label is only valid if BOTH sides know it.
-const PRESET_TYPES = ['Easy', 'Tempo', 'Long Run', 'Intervals', 'Race'];
+const PRESET_TYPES = ['Easy', 'Tempo', 'Long Run', 'Intervals', 'Race', 'Mountain Run'];
 const MAX_TYPE_LABEL = 30;
 // The meeting point is optional. The name/description is free text, the
 // coordinates are a resolved pin for the static map thumbnail. Both are
