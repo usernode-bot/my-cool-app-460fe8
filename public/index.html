@@ -321,11 +321,21 @@
         </div>
       </header>
 
+      <!-- The club's distance for this week. A reading, not a control:
+           nothing here is tappable. Hidden until a board load answers, and
+           hidden again if the board fails, so it never shows a wrong
+           number. -->
+      <div id="week-total" class="hidden mt-5 bg-white dark:bg-[#1c1c20] rounded-2xl px-4 py-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+        <h2 class="text-[13px] font-semibold tracking-[0.07em] text-[#62626a] dark:text-[#b0b0b8]">THIS WEEK</h2>
+        <p id="week-km" class="mt-1 text-[28px] font-extrabold tracking-tight leading-tight"></p>
+        <p id="week-sub" class="text-[15px] text-[#62626a] dark:text-[#b0b0b8]"></p>
+      </div>
+
       <div class="mt-5 grid grid-cols-2 gap-1 p-1 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[14px]">
         <button id="tab-upcoming" type="button" data-tab="upcoming"
-          class="rounded-[11px] py-2 text-[16px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]">Upcoming</button>
+          class="rounded-[11px] py-2 min-h-[44px] text-[16px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]">Upcoming</button>
         <button id="tab-past" type="button" data-tab="past"
-          class="rounded-[11px] py-2 text-[16px] font-medium bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none">Past</button>
+          class="rounded-[11px] py-2 min-h-[44px] text-[16px] font-medium bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none">Past</button>
       </div>
 
       <label for="member-search" class="sr-only">Search runs by member name</label>
@@ -341,30 +351,30 @@
         <div id="time-format" role="group" aria-label="Time format"
           class="shrink-0 flex items-center gap-0.5 p-0.5 bg-[#e5e5ea] dark:bg-[#26262b] rounded-[10px]">
           <button id="tf-auto" type="button" data-format="auto" aria-pressed="true" title="Follows your language"
-            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_2px_rgba(0,0,0,0.08)]">Auto</button>
+            class="px-2.5 py-1 min-h-[44px] min-w-[44px] rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_2px_rgba(0,0,0,0.08)]">Auto</button>
           <button id="tf-12" type="button" data-format="12" aria-pressed="false"
-            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none">AM/PM</button>
+            class="px-2.5 py-1 min-h-[44px] min-w-[44px] rounded-[8px] text-[13px] font-semibold bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none">AM/PM</button>
           <button id="tf-24" type="button" data-format="24" aria-pressed="false"
-            class="px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none">24h</button>
+            class="px-2.5 py-1 min-h-[44px] min-w-[44px] rounded-[8px] text-[13px] font-semibold bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none">24h</button>
         </div>
       </div>
       <div id="dist-filter" role="group" aria-label="Filter by distance"
         class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
         <button id="dist-5k" type="button" data-dist="5k" aria-pressed="false"
-          class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">5K</button>
+          class="dist-chip px-3.5 py-1.5 min-h-[44px] rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">5K</button>
         <button id="dist-10k" type="button" data-dist="10k" aria-pressed="false"
-          class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">10K</button>
+          class="dist-chip px-3.5 py-1.5 min-h-[44px] rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">10K</button>
         <button id="dist-half" type="button" data-dist="half" aria-pressed="false"
-          class="dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">Half</button>
+          class="dist-chip px-3.5 py-1.5 min-h-[44px] rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">Half</button>
       </div>
       <div id="pace-filter" role="group" aria-label="Filter by pace"
         class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
         <button id="pace-fast" type="button" data-pace="fast" aria-pressed="false"
-          class="pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">Under 5:30</button>
+          class="pace-chip px-3.5 py-1.5 min-h-[44px] rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">Under 5:30</button>
         <button id="pace-steady" type="button" data-pace="steady" aria-pressed="false"
-          class="pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">5:30 to 6:30</button>
+          class="pace-chip px-3.5 py-1.5 min-h-[44px] rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">5:30 to 6:30</button>
         <button id="pace-easy" type="button" data-pace="easy" aria-pressed="false"
-          class="pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">Over 6:30</button>
+          class="pace-chip px-3.5 py-1.5 min-h-[44px] rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]">Over 6:30</button>
       </div>
       <div id="run-list" class="space-y-3.5"></div>
     </section>
@@ -504,6 +514,7 @@
       // same way ?tf= seeds the format switch. Never persisted.
       q: (params.get('q') || '').trim(),
       runs: [],
+      week: null,        // { distance_km, run_count } for the club's week, null until a load answers
       loading: false,    // first load in flight: the list shows skeleton cards
       loadError: false,  // the last load failed: the list shows a retry row
       customTypes: [],   // the signed-in member's own types, from /api/run-types
@@ -998,8 +1009,8 @@
       if (past) {
         var mine = run.kudos_from_me;
         var kudosCls = mine
-          ? 'kudos-btn shrink-0 px-4 py-2 rounded-full bg-[#c2410c] text-white text-[15px] font-semibold'
-          : 'kudos-btn shrink-0 px-4 py-2 rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[15px] font-semibold';
+          ? 'kudos-btn shrink-0 px-4 py-2 min-h-[44px] rounded-full bg-[#c2410c] text-white text-[15px] font-semibold'
+          : 'kudos-btn shrink-0 px-4 py-2 min-h-[44px] rounded-full bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] text-[15px] font-semibold';
         kudos = '<button type="button" class="' + kudosCls + '" data-id="' + run.id + '"' +
           (mine ? ' aria-pressed="true"' : '') +
           (!authHeaders['x-usernode-token'] ? ' disabled title="Sign in to give kudos"' : '') +
@@ -1034,7 +1045,7 @@
       var calIcon = '';
       if (!past) {
         calIcon =
-          '<button type="button" class="cal-card-btn un-touch-target shrink-0 w-9 h-9 rounded-full bg-white dark:bg-[#1c1c20] border border-[#ececf0] dark:border-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] flex items-center justify-center" data-cal-icon="1" data-id="' + run.id + '" aria-label="Add to calendar">' +
+          '<button type="button" class="cal-card-btn un-touch-target shrink-0 w-11 h-11 rounded-full bg-white dark:bg-[#1c1c20] border border-[#ececf0] dark:border-[#2c2c31] text-[#62626a] dark:text-[#b0b0b8] flex items-center justify-center" data-cal-icon="1" data-id="' + run.id + '" aria-label="Add to calendar">' +
           '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v12a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-12zM4 10h16M8 3v4M16 3v4"/></svg>' +
           '</button>';
       }
@@ -1141,8 +1152,8 @@
       listEl.innerHTML = shown.map(cardHtml).join('');
     }
 
-    var TAB_ON = 'rounded-[11px] py-2 text-[16px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]';
-    var TAB_OFF = 'rounded-[11px] py-2 text-[16px] font-medium bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none';
+    var TAB_ON = 'rounded-[11px] py-2 min-h-[44px] text-[16px] font-medium bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]';
+    var TAB_OFF = 'rounded-[11px] py-2 min-h-[44px] text-[16px] font-medium bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none';
 
     function renderTabs() {
       document.getElementById('tab-upcoming').className =
@@ -1151,20 +1162,63 @@
         state.tab === 'past' ? TAB_ON : TAB_OFF;
     }
 
+    // The week card's value classes, whole literals so the build-time
+    // extractor keeps them: a total in the app's text colour, a quiet zero
+    // in the same grey as the label.
+    var WEEK_VALUE_ON = 'mt-1 text-[28px] font-extrabold tracking-tight leading-tight';
+    var WEEK_VALUE_ZERO = 'mt-1 text-[28px] font-extrabold tracking-tight leading-tight text-[#62626a] dark:text-[#b0b0b8]';
+
+    function renderWeek() {
+      var card = document.getElementById('week-total');
+      if (!card) return;
+      if (!state.week) {
+        card.classList.add('hidden');
+        return;
+      }
+      var km = Number(state.week.distance_km) || 0;
+      var count = Number(state.week.run_count) || 0;
+      var valueEl = document.getElementById('week-km');
+      var subEl = document.getElementById('week-sub');
+      if (km > 0) {
+        valueEl.className = WEEK_VALUE_ON;
+        valueEl.textContent = fmtKm(km);
+        subEl.textContent = 'Across ' + count + (count === 1 ? ' run' : ' runs');
+      } else {
+        // fmtKm answers '' for zero, and "0 km" is the honest reading here.
+        valueEl.className = WEEK_VALUE_ZERO;
+        valueEl.textContent = '0 km';
+        subEl.textContent = 'No runs with a distance yet this week.';
+      }
+      card.classList.remove('hidden');
+    }
+
     function loadRuns() {
+      // The week total is counted in the viewer's own zone, so the board
+      // load says which one; a device that will not say falls back to UTC
+      // on the server rather than failing the request.
+      var deviceTz;
+      try { deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone; }
+      catch (err) { deviceTz = ''; }
       var qs = 'filter=' + state.tab +
-        (state.q ? '&q=' + encodeURIComponent(state.q) : '');
+        (state.q ? '&q=' + encodeURIComponent(state.q) : '') +
+        (deviceTz ? '&tz=' + encodeURIComponent(deviceTz) : '');
       state.loading = true;
       state.loadError = false;
       renderList();
       return api('/api/runs?' + qs).then(function (data) {
         state.runs = data.runs || [];
+        state.week = data.week || null;
         state.loading = false;
         renderList();
+        renderWeek();
       }).catch(function (err) {
         state.loading = false;
         state.loadError = true;
+        // No answer means no trustworthy total: hide the card rather than
+        // leave a stale number next to a failed board.
+        state.week = null;
         renderList();
+        renderWeek();
       });
     }
 
@@ -1403,8 +1457,8 @@
     }
 
     // Whole-literal class strings, same reason as the tab states above.
-    var TF_ON = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_2px_rgba(0,0,0,0.08)]';
-    var TF_OFF = 'px-2.5 py-1 rounded-[8px] text-[13px] font-semibold bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none';
+    var TF_ON = 'px-2.5 py-1 min-h-[44px] min-w-[44px] rounded-[8px] text-[13px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white border border-[#ececf0] dark:border-[#2c2c31] shadow-[0_1px_2px_rgba(0,0,0,0.08)]';
+    var TF_OFF = 'px-2.5 py-1 min-h-[44px] min-w-[44px] rounded-[8px] text-[13px] font-semibold bg-transparent text-[#62626a] dark:text-[#b0b0b8] shadow-none';
 
     function renderTimeFormat() {
       ['auto', '12', '24'].forEach(function (value) {
@@ -1532,12 +1586,12 @@
     // Whole-literal class strings, same reason as the tab states above.
     // A selected filter lifts as a raised neutral surface instead of filling
     // blue: selection reads through contrast, not hue.
-    var CHIP_ON = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
-    var CHIP_OFF = 'dist-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]';
+    var CHIP_ON = 'dist-chip px-3.5 py-1.5 min-h-[44px] rounded-full text-[15px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
+    var CHIP_OFF = 'dist-chip px-3.5 py-1.5 min-h-[44px] rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]';
 
     // Same raised-neutral treatment as the distance chips above.
-    var PACE_ON = 'pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
-    var PACE_OFF = 'pace-chip px-3.5 py-1.5 rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]';
+    var PACE_ON = 'pace-chip px-3.5 py-1.5 min-h-[44px] rounded-full text-[15px] font-semibold bg-white dark:bg-[#38383d] text-[#111114] dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-[#e4e4ea] dark:ring-[#3a3a42]';
+    var PACE_OFF = 'pace-chip px-3.5 py-1.5 min-h-[44px] rounded-full text-[15px] font-semibold bg-[#e9e9ef] dark:bg-[#2c2c31] text-[#57575e] dark:text-[#b0b0b8]';
 
     function renderDistFilter() {
       ['5k', '10k', 'half'].forEach(function (id) {
